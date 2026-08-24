@@ -220,6 +220,14 @@
     border-radius:7px; padding:7px; font-size:10.5px; font-family:var(--sans); cursor:pointer; box-sizing:border-box;
   }
   .pid-add-btn:hover{ border-color:var(--baixa); color:var(--text); }
+
+  .pid-osbl-grid{ display:grid; grid-template-columns:1fr 1fr; gap:3px 8px; margin-top:6px; }
+  .pid-osbl-item{ display:flex; align-items:center; justify-content:space-between; gap:4px; font-size:9.5px; color:var(--muted); }
+  .pid-osbl-item input{
+    width:48px; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:4px; padding:2px 4px; font-family:var(--mono); font-size:9.5px; text-align:right;
+  }
+  .pid-osbl-item input:focus{ outline:none; border-color:var(--baixa); }
 </style>
 </head>
 <body>
@@ -274,18 +282,22 @@
       <input type="text" id="tg1OutBaixa" value="0,00" style="display:none">
       <input type="text" id="excessMB" value="0,00" style="display:none">
 
-      <!-- ===== Caldeiras ===== -->
-      <div class="pid-box" style="left:30px; top:40px; width:130px; height:70px; border-color:#e2725b;">
+      <!-- ===== Caldeiras (capacidade + turndown = "eficiência", igual ao outro simulador) ===== -->
+      <div class="pid-box" style="left:30px; top:30px; width:150px; height:104px; border-color:#e2725b;">
         <div class="pid-title">C1</div>
-        <div class="pid-row"><span>Alta</span><input type="number" id="c1Flow" value="0" step="0.1"><span>t/h</span></div>
+        <div class="pid-row"><span>Capac.</span><input type="number" id="c1Cap" value="35" step="0.5"><span>t/h</span></div>
+        <div class="pid-row"><span>Turndown</span><input type="number" id="c1Turndown" value="0" step="0.1" min="0" max="100"><span>%</span></div>
+        <div class="pid-row"><span>Produção</span><input type="number" id="c1Flow" value="0" step="0.1"><span>t/h</span></div>
       </div>
-      <div class="pid-box" style="left:30px; top:130px; width:130px; height:70px; border-color:#e2725b;">
+      <div class="pid-box" style="left:30px; top:144px; width:150px; height:104px; border-color:#e2725b;">
         <div class="pid-title">C2</div>
-        <div class="pid-row"><span>Alta</span><input type="number" id="c2Flow" value="0" step="0.1"><span>t/h</span></div>
+        <div class="pid-row"><span>Capac.</span><input type="number" id="c2Cap" value="35" step="0.5"><span>t/h</span></div>
+        <div class="pid-row"><span>Turndown</span><input type="number" id="c2Turndown" value="0" step="0.1" min="0" max="100"><span>%</span></div>
+        <div class="pid-row"><span>Produção</span><input type="number" id="c2Flow" value="0" step="0.1"><span>t/h</span></div>
       </div>
 
       <!-- ===== Partida de Alta (consumos extras viram caixas próprias, mais abaixo) ===== -->
-      <div class="pid-box" style="left:200px; top:250px; width:140px; height:56px; border-color:#e2725b;">
+      <div class="pid-box" style="left:200px; top:262px; width:140px; height:56px; border-color:#e2725b;">
         <div class="pid-title">Partida (Alta)</div>
         <div class="pid-row" style="justify-content:center;"><span class="pid-readonly" id="partidaAltaBox">0,00 t/h</span></div>
       </div>
@@ -341,12 +353,20 @@
         <div class="pid-title">Desaerador</div>
         <div class="pid-row"><span>Baixa</span><input type="number" id="desaerador" value="0" step="0.001"></div>
       </div>
-      <div class="pid-box" style="left:550px; top:396px; width:160px; height:68px; border-color:#3fa7c9;">
+      <div class="pid-box" style="left:520px; top:364px; width:190px; height:120px; border-color:#3fa7c9;">
         <div class="pid-title">Aquec. Tanques OSBL</div>
-        <div class="pid-row" style="justify-content:center;"><span class="pid-readonly" id="osblTotalDiagram">0,0000 t/h</span></div>
-        <div class="pid-note">7 itens — detalhe abaixo</div>
+        <div class="pid-row" style="justify-content:center; margin-top:0;"><span class="pid-readonly" id="osblTotalDiagram">0,0000 t/h</span></div>
+        <div class="pid-osbl-grid">
+          <div class="pid-osbl-item"><span>150</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+          <div class="pid-osbl-item"><span>151</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+          <div class="pid-osbl-item"><span>074</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+          <div class="pid-osbl-item"><span>075</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+          <div class="pid-osbl-item"><span>161</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+          <div class="pid-osbl-item"><span>158</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+          <div class="pid-osbl-item"><span>159</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+        </div>
       </div>
-      <div class="pid-box" style="left:550px; top:506px; width:160px; height:68px; border-color:#3fa7c9;">
+      <div class="pid-box" style="left:550px; top:492px; width:160px; height:68px; border-color:#3fa7c9;">
         <div class="pid-title">Partida (Baixa)</div>
         <div class="pid-row" style="justify-content:center;"><span class="pid-readonly" id="partidaBaixaBox">0,00 t/h</span></div>
       </div>
@@ -408,25 +428,6 @@
   </div>
 </div>
 
-<div class="condenser-panel">
-  <h2 style="color:var(--text);">Aquecimento OSBL</h2>
-  <div class="note" style="padding:0 0 6px;">Consumos extras agora são adicionados direto no diagrama (botão "+ caixa" em cada header). Aqui fica só o detalhamento dos 7 tanques do OSBL.</div>
-  <div class="row consumo osbl-toggle-row" id="osblToggle" style="margin-top:6px; border-top:1px solid var(--line); padding-top:10px;">
-    <div class="label"><span class="arrow" id="osblArrow">▸</span> Aquecimento Tanques OSBL<small>7 itens</small></div>
-    <div class="osbl-total-box"><span id="osblTotal">0,0000</span></div>
-    <div class="unit">t/h</div>
-  </div>
-  <div class="osbl-list" id="osblList">
-    <div class="row consumo"><div class="label">TQ-150</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
-    <div class="row consumo"><div class="label">TQ-151</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
-    <div class="row consumo"><div class="label">TQ-074</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
-    <div class="row consumo"><div class="label">TQ-075</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
-    <div class="row consumo"><div class="label">TQ-161</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
-    <div class="row consumo"><div class="label">TQ-158</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
-    <div class="row consumo"><div class="label">TQ-159</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
-  </div>
-</div>
-
 <div class="condenser-panel" id="balancoGeralPanel">
   <h2 style="color:var(--text);">Balanço Geral do Sistema</h2>
   <div class="cond-grid" style="grid-template-columns:1fr 1fr; margin-top:14px;">
@@ -473,6 +474,25 @@ const MEDIA_X = 1030, BAIXA_X = 730;
 const startupCheckbox = document.getElementById('isStartup');
 let autosaveTimer = null;
 let lastResults = {};
+let c1Source = 'turndown';
+let c2Source = 'turndown';
+
+// Capacidade × turndown = produção (a mesma "eficiência" do outro simulador),
+// funcionando nos dois sentidos: digitar o turndown calcula a produção, e
+// digitar a produção direto recalcula o turndown correspondente.
+function boilerFlow(prefix, source){
+  const cap = num(prefix + 'Cap');
+  if (source === 'production'){
+    const flow = num(prefix + 'Flow');
+    const td = cap > 0 ? (flow/cap*100) : 0;
+    document.getElementById(prefix + 'Turndown').value = Math.round(td*100)/100;
+    return flow;
+  }
+  const td = num(prefix + 'Turndown');
+  const flow = cap * (td/100);
+  document.getElementById(prefix + 'Flow').value = Math.round(flow*1000)/1000;
+  return flow;
+}
 
 let startupItems = [
   {name:'UGH — Partida', pressure:'alta', flow:0},
@@ -486,9 +506,9 @@ let extraConsumptions = { alta: [], media: [], baixa: [] };
 // próprio diagrama, e a partir de que Y cada coluna começa (logo abaixo
 // da caixa "Partida" correspondente).
 const EXTRA_COL = {
-  alta:  {x:200,  w:140, startY:320, containerId:'extraBoxAlta'},
+  alta:  {x:200,  w:140, startY:332, containerId:'extraBoxAlta'},
   media: {x:1050, w:150, startY:388, containerId:'extraBoxMedia'},
-  baixa: {x:550,  w:160, startY:588, containerId:'extraBoxBaixa'}
+  baixa: {x:550,  w:160, startY:574, containerId:'extraBoxBaixa'}
 };
 const EXTRA_ROW_H = 66;   // espaçamento vertical entre caixas extras
 const EXTRA_BOX_H = 56;
@@ -505,6 +525,7 @@ function renderExtraConsumptions(level){
       <input type="text" class="pid-extra-name" value="${escapeHtml(item.name)}">
       <div class="pid-row">
         <input type="number" class="pid-extra-flow" value="${item.flow}" step="0.1">
+        <span>t/h</span>
         <button type="button" class="pid-extra-del" title="Excluir caixa">×</button>
       </div>
     </div>
@@ -548,7 +569,7 @@ function getExtraConsumptionTotal(level){
 // usado pra saber se o Condensador precisa descer pra abrir espaço.
 function extraColumnBottom(level){
   const n = extraConsumptions[level].length;
-  const partidaBottom = { alta:306, media:374, baixa:684 }[level];
+  const partidaBottom = { alta:318, media:374, baixa:560 }[level];
   if (n === 0) return partidaBottom;
   return extraBoxTop(level, n-1) + EXTRA_BOX_H;
 }
@@ -620,12 +641,12 @@ function renderFlowDiagram(v){
   </defs>`);
 
   // ---------- Caldeiras + header de Alta ----------
-  parts.push(wire([[160,75],[200,75],[200,110]], WIRE.blue, 'mk-blue'));
-  parts.push(wire([[160,165],[200,165],[200,110]], WIRE.blue, 'mk-blue'));
-  parts.push(wire([[200,110],[460,110]], WIRE.blue, 'mk-blue'));
-  parts.push(`<text x="205" y="102" font-family="var(--sans)" font-size="11" fill="${PAL.alta}" font-weight="700">ALTA — 60 kgf/cm²g</text>`);
+  parts.push(wire([[180,82],[220,82],[220,140]], WIRE.blue, 'mk-blue'));
+  parts.push(wire([[180,196],[220,196],[220,140]], WIRE.blue, 'mk-blue'));
+  parts.push(wire([[220,140],[460,140]], WIRE.blue, 'mk-blue'));
+  parts.push(`<text x="225" y="132" font-family="var(--sans)" font-size="11" fill="${PAL.alta}" font-weight="700">ALTA — 60 kgf/cm²g</text>`);
 
-  parts.push(wire([[270,110],[270,250]], WIRE.neutral, 'mk-neutral'));
+  parts.push(wire([[270,140],[270,262]], WIRE.neutral, 'mk-neutral'));
 
   if (v.deficitAlta > 0){
     parts.push(`<text x="205" y="30" font-family="var(--mono)" font-size="10.5" fill="${PAL.danger}">⚠ Déficit de Alta: ${fmt(v.deficitAlta)} t/h</text>`);
@@ -641,7 +662,7 @@ function renderFlowDiagram(v){
 
   // ---------- ties dos consumidores (Y de cada caixa, alinhado com o HTML) ----------
   const ROW = { ptu:220, hefa:316, ugh:412, biofcc:508, htp9:604, tbomb:700 };
-  const BAIXA_SOLO = { desaerador:320, osbl:430, partida:540 };
+  const BAIXA_SOLO = { desaerador:320, osbl:424, partida:526 };
   const MEDIA_SOLO_Y = 340;
 
   // PTU: consumo dos dois lados
@@ -759,9 +780,9 @@ function calc(){
   set('tb1out', fmt(tb1) + ' t/h');
   set('tb2out', fmt(tb2) + ' t/h');
 
-  // --- ALTA: caldeiras C1 + C2 ---
-  const c1Flow = num('c1Flow');
-  const c2Flow = num('c2Flow');
+  // --- ALTA: caldeiras C1 + C2 (capacidade × turndown) ---
+  const c1Flow = boilerFlow('c1', c1Source);
+  const c2Flow = boilerFlow('c2', c2Source);
   const producaoAlta = c1Flow + c2Flow;
 
   const outrosAlta = startupAlta + getExtraConsumptionTotal('alta');
@@ -792,7 +813,6 @@ function calc(){
   // --- OSBL ---
   let osblSum = 0;
   document.querySelectorAll('.osbl').forEach(inp=>{ osblSum += parseFloat(inp.value) || 0; });
-  set('osblTotal', fmt(osblSum));
   set('osblTotalDiagram', fmt(osblSum) + ' t/h');
 
   // --- BAIXA ---
@@ -911,18 +931,18 @@ function calc(){
 }
 
 document.querySelectorAll('input[type=number]').forEach(inp=>{
+  if (['c1Flow','c1Turndown','c2Flow','c2Turndown'].includes(inp.id)) return; // tratados abaixo com controle de origem
   inp.addEventListener('input', calc);
 });
+document.getElementById('c1Flow').addEventListener('input', ()=>{ c1Source = 'production'; calc(); });
+document.getElementById('c1Turndown').addEventListener('input', ()=>{ c1Source = 'turndown'; calc(); });
+document.getElementById('c2Flow').addEventListener('input', ()=>{ c2Source = 'production'; calc(); });
+document.getElementById('c2Turndown').addEventListener('input', ()=>{ c2Source = 'turndown'; calc(); });
 
 document.getElementById('isStartup').addEventListener('change', ()=>{ renderStartupItems(); calc(); });
 document.getElementById('addStartupItem').addEventListener('click', ()=>{
   startupItems.push({name:'Novo item de partida', pressure:'baixa', flow:0});
   renderStartupItems(); calc();
-});
-document.getElementById('osblToggle').addEventListener('click', ()=>{
-  const list = document.getElementById('osblList');
-  const open = list.classList.toggle('open');
-  document.getElementById('osblArrow').textContent = open ? '▾' : '▸';
 });
 
 const defaults = {};
@@ -939,6 +959,8 @@ document.getElementById('resetBtn').addEventListener('click', ()=>{
     {name:'BioFCC — Partida', pressure:'baixa', flow:0}
   ];
   extraConsumptions = {alta:[], media:[], baixa:[]};
+  c1Source = 'turndown';
+  c2Source = 'turndown';
   renderStartupItems();
   renderAllExtraConsumptions();
   calc();
@@ -967,7 +989,7 @@ function collectState(){
   return {
     savedAt: new Date().toISOString(), inputs, osblValues,
     isStartup: document.getElementById('isStartup').checked,
-    startupItems, extraConsumptions
+    startupItems, extraConsumptions, c1Source, c2Source
   };
 }
 
@@ -983,6 +1005,8 @@ function applyState(state){
   document.getElementById('isStartup').checked = !!state.isStartup;
   if (state.startupItems) startupItems = state.startupItems;
   if (state.extraConsumptions) extraConsumptions = state.extraConsumptions;
+  if (state.c1Source) c1Source = state.c1Source;
+  if (state.c2Source) c2Source = state.c2Source;
   renderStartupItems();
   renderAllExtraConsumptions();
   calc();
@@ -1136,7 +1160,7 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   rows.push(['Vapor Baixa','HEFA — Regime', document.getElementById('hefaRegimeLP').value, 't/h']);
   rows.push(['Vapor Baixa','BioFCC', document.getElementById('biofccLP').value, 't/h']);
   rows.push(['Vapor Baixa','UGH — Consumo', document.getElementById('ughConsumoLP').value, 't/h']);
-  rows.push(['Vapor Baixa','Aquecimento Tanques OSBL (total)', document.getElementById('osblTotal').textContent, 't/h']);
+  rows.push(['Vapor Baixa','Aquecimento Tanques OSBL (total)', document.getElementById('osblTotalDiagram').textContent, 't/h']);
   rows.push(['Vapor Baixa','Saldo final de Vapor Baixa', fmt(lastResults.saldoBaixa), 't/h']);
   if (lastResults.deficitBaixa > 0) rows.push(['Vapor Baixa','Déficit de Baixa', fmt(lastResults.deficitBaixa), 't/h']);
 
