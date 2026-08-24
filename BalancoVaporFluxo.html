@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Simulador de Balanço de Vapor — Diagrama de Processo</title>
+<style>
+  :root{
+    --bg:#10161c;
+    --panel:#161e26;
+    --panel2:#1c252e;
+    --line:#2a3542;
+    --text:#e8edf2;
+    --muted:#8695a4;
+    --alta:#e2725b;      /* vapor alta - terracota/vermelho quente */
+    --alta-bg:#2a1a16;
+    --media:#e0a934;     /* vapor média - âmbar */
+    --media-bg:#2a2114;
+    --baixa:#3fa7c9;     /* vapor baixa - azul vapor */
+    --baixa-bg:#122730;
+    --consumo:#4caf72;
+    --danger:#e2545a;
+    --ok:#4caf72;
+    --mono: 'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+    --sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--sans); padding:24px; line-height:1.4;
+  }
+  h1{font-size:20px; margin:0 0 2px 0; letter-spacing:.3px;}
+  .subtitle{color:var(--muted); font-size:13px; margin-bottom:20px;}
+
+  .summary{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px;}
+  @media(max-width:1000px){ .summary{grid-template-columns:repeat(2,1fr);} }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .card .k{font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:6px;}
+  .card .v{font-family:var(--mono); font-size:22px; font-weight:700;}
+  .card .v small{font-size:12px; color:var(--muted); font-weight:400;}
+  .card.hot{ border-color:#47252a; background:linear-gradient(180deg,#211014,#191115);}
+  .card.hot .v{color:var(--danger);}
+  .card.cool .v{color:var(--ok);}
+
+  .condenser-panel{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; margin-top:16px; }
+  .condenser-panel h2{margin:0 0 4px; font-size:15px; color:var(--baixa);}
+  .cond-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-top:12px;}
+  @media(max-width:900px){.cond-grid{grid-template-columns:repeat(2,1fr);}}
+  .field{display:flex; flex-direction:column; gap:4px;}
+  .field label{font-size:11px; color:var(--muted);}
+  .field input{background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:6px; padding:6px 8px; font-family:var(--mono); font-size:12.5px;}
+  .gauge-wrap{margin-top:14px;}
+  .gauge{ height:14px; border-radius:7px; background:#0e1418; overflow:hidden; position:relative; border:1px solid var(--line);}
+  .gauge-fill{height:100%; border-radius:7px; transition:width .2s ease;}
+  .gauge-marks{display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-top:4px; font-family:var(--mono);}
+
+  .footer-actions{ display:flex; gap:10px; margin-top:18px; }
+  button.reset{ background:var(--panel2); color:var(--text); border:1px solid var(--line); padding:8px 14px; border-radius:7px; font-size:12.5px; cursor:pointer;}
+  button.reset:hover{border-color:var(--baixa);}
+
+  .note{font-size:10.5px; color:var(--muted); margin-top:2px; padding:0 14px 10px;}
+
+  /* linhas reaproveitadas pelo painel de OSBL */
+  .row{ display:flex; align-items:center; justify-content:space-between; padding:6px 14px; gap:8px; border-left:3px solid transparent;}
+  .row.consumo{ border-left-color:var(--consumo); }
+  .row .label{ font-size:12.5px; flex:1; min-width:0; }
+  .row input[type=number]{
+    width:78px; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:5px 6px; font-family:var(--mono); font-size:12.5px; text-align:right;
+  }
+  .row input[type=number]:focus{outline:none; border-color:var(--baixa);}
+  .row .unit{ font-size:10.5px; color:var(--muted); width:26px;}
+  .osbl-toggle{cursor:pointer; user-select:none; display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); padding:4px 14px;}
+  .osbl-list{display:none;}
+  .osbl-list.open{display:block;}
+  .row.osbl-toggle-row{cursor:pointer; user-select:none;}
+  .row.osbl-toggle-row .label{display:flex; align-items:center; gap:6px;}
+  .row.osbl-toggle-row .label .arrow{font-size:10px; color:var(--muted); transition:transform .15s ease;}
+  .osbl-total-box{
+    width:78px; background:var(--panel2); border:1px solid var(--line); color:var(--muted);
+    border-radius:6px; padding:5px 6px; font-family:var(--mono); font-size:12.5px; text-align:right;
+  }
+  #tblEntradas td, #tblSaidas td{ padding:4px 6px; border-bottom:1px solid var(--line); }
+  #tblEntradas td:last-child, #tblSaidas td:last-child{ text-align:right; }
+  #tblEntradas tr:last-child td, #tblSaidas tr:last-child td{ border-bottom:none; font-weight:700; }
+
+  .startup-panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    margin-top:16px;
+    padding:0 12px 12px;
+  }
+  .startup-head{
+    background:linear-gradient(90deg,#24172f,#1b1d2a);
+    color:#d76dff;
+    margin:0 -12px 10px;
+    padding:10px 12px;
+    font-weight:600;
+    font-size:13px;
+    border-radius:10px 10px 0 0;
+  }
+  .startup-enable{ display:flex; align-items:center; gap:7px; font-size:11px; color:var(--muted); margin-bottom:6px;}
+  .startup-list{ border-left:2px solid #7b5aa6; padding-left:10px;}
+  .startup-item{
+    display:grid; grid-template-columns:minmax(260px,1fr) 90px 80px 30px 20px;
+    gap:8px; align-items:center; margin-bottom:7px;
+  }
+  .startup-item input, .startup-item select{
+    background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:6px 8px; font-size:11.5px; min-width:0;
+  }
+  .startup-item .startup-unit{ color:var(--muted); font-size:10px;}
+  .startup-delete{ background:transparent; border:none; color:#9f4a52; cursor:pointer; font-size:16px; line-height:1;}
+  .startup-add{
+    background:transparent; color:#c98cff; border:1px dashed #9f6ad1; border-radius:6px;
+    padding:6px 10px; cursor:pointer; font-size:11px; margin:4px 0 10px 10px;
+  }
+  .startup-total{
+    display:flex; justify-content:space-between; align-items:center; background:var(--panel2);
+    padding:9px 10px; font-family:var(--mono); font-size:11px; color:#d76dff;
+  }
+  @media(max-width:850px){
+    .startup-item{ grid-template-columns:1fr 84px 74px 24px; }
+    .startup-item .startup-unit{display:none;}
+  }
+
+  .extra-consumption-list{ padding:0 14px 4px; }
+  .extra-consumption-item{
+    display:grid; grid-template-columns:minmax(180px,1fr) 84px 30px 20px;
+    gap:8px; align-items:center; margin:6px 0; padding-left:8px; border-left:3px solid var(--consumo);
+  }
+  .extra-consumption-item input{
+    background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:6px 8px; font-size:11.5px; min-width:0;
+  }
+  .extra-consumption-item .extra-unit{ color:var(--muted); font-size:10px;}
+  .extra-delete{ background:transparent; border:none; color:#9f4a52; cursor:pointer; font-size:16px; line-height:1;}
+  .extra-add{
+    margin:4px 14px 10px; background:transparent; color:var(--consumo); border:1px dashed var(--consumo);
+    border-radius:6px; padding:6px 10px; cursor:pointer; font-size:11px;
+  }
+
+  .toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px;}
+  .toolbar button{
+    font-family:var(--sans); font-size:12.5px; padding:8px 14px; border-radius:7px; cursor:pointer;
+    border:1px solid var(--line); background:var(--panel2); color:var(--text);
+    display:flex; align-items:center; gap:6px; transition:filter .15s ease;
+  }
+  .toolbar button:hover{ filter:brightness(1.3); }
+  .toolbar button.primary{ background:var(--media); border-color:var(--media); color:#1a1200; font-weight:600; }
+  .toolbar button.secondary{ background:var(--baixa); border-color:var(--baixa); color:#04202b; font-weight:600; }
+  .toolbar .save-status{ font-size:11px; color:var(--muted); }
+  .autosave-note{ font-size:10.5px; color:var(--muted); margin:-10px 0 16px; }
+
+  .scenario-bar{
+    display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0 0 16px; padding:10px 12px;
+    background:var(--panel); border:1px solid var(--line); border-radius:8px;
+  }
+  .scenario-bar .scenario-label{ font-size:11px; color:var(--muted); margin-right:2px;}
+  .scenario-bar input[type=text]{
+    background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:7px 10px; font-size:12.5px; font-family:var(--sans); min-width:170px;
+  }
+  .scenario-bar select{
+    background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:7px 10px; font-size:12.5px; font-family:var(--sans); min-width:180px;
+  }
+  .scenario-bar button{
+    font-family:var(--sans); font-size:12px; padding:7px 12px; border-radius:6px; cursor:pointer;
+    border:1px solid var(--line); background:var(--panel2); color:var(--text);
+    display:flex; align-items:center; gap:5px; transition:filter .15s ease;
+  }
+  .scenario-bar button:hover{ filter:brightness(1.3); }
+
+  /* ---------- Diagrama de processo ---------- */
+  .diagram-panel{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .diagram-panel h2{ margin:0 0 4px; font-size:15px; color:var(--text);}
+  .diagram-panel .note{ padding:0 0 8px; }
+  .diagram-legend{ display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:var(--muted); margin-bottom:10px; }
+  .diagram-legend .dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+  .diagram-wrap{ width:100%; overflow-x:auto; padding-bottom:4px; }
+  .diagram-stage{ position:relative; width:1220px; height:970px; }
+  .diagram-stage svg{ position:absolute; left:0; top:0; width:1220px; height:970px; }
+
+  .pid-box{
+    position:absolute; border-radius:9px; border:2px solid var(--line); background:#1c252e;
+    padding:6px 9px; box-sizing:border-box; overflow:hidden;
+  }
+  .pid-box .pid-title{ font-size:11px; font-weight:700; color:var(--text); text-align:center; margin-bottom:5px; white-space:nowrap;}
+  .pid-box .pid-row{ display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:10px; color:var(--muted); margin-top:4px;}
+  .pid-box .pid-row span:first-child{ white-space:nowrap; }
+  .pid-box .pid-row input[type=number]{
+    width:64px; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:5px; padding:3px 5px; font-family:var(--mono); font-size:10.5px; text-align:right;
+  }
+  .pid-box .pid-row input[type=number]:focus{ outline:none; border-color:var(--baixa); }
+  .pid-box .pid-readonly{ font-family:var(--mono); font-size:10.5px; color:var(--text); }
+  .pid-ref-row{ display:flex; gap:4px; align-items:center; justify-content:center; margin-top:8px; font-size:9px; color:var(--muted);}
+  .pid-ref-row input{
+    width:34px; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:4px; padding:2px 3px; font-family:var(--mono); font-size:9.5px; text-align:center;
+  }
+  .pid-ref-row input:focus{ outline:none; border-color:var(--baixa); }
+  .pid-note{ font-size:9px; color:var(--muted); text-align:center; margin-top:4px;}
+
+  .pid-extra-name{
+    width:100%; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:4px; padding:3px 5px; font-size:10px; font-family:var(--sans); box-sizing:border-box; margin-bottom:4px;
+  }
+  .pid-extra-name:focus{ outline:none; border-color:var(--baixa); }
+  .pid-extra .pid-row{ margin-top:0; }
+  .pid-extra-flow{
+    flex:1; min-width:0; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:4px; padding:3px 5px; font-family:var(--mono); font-size:10px; text-align:right;
+  }
+  .pid-extra-flow:focus{ outline:none; border-color:var(--baixa); }
+  .pid-extra-del{ background:transparent; border:none; color:#9f4a52; cursor:pointer; font-size:14px; line-height:1; padding:0 2px;}
+  .pid-add-btn{
+    position:absolute; background:transparent; border:1px dashed var(--muted); color:var(--muted);
+    border-radius:7px; padding:7px; font-size:10.5px; font-family:var(--sans); cursor:pointer; box-sizing:border-box;
+  }
+  .pid-add-btn:hover{ border-color:var(--baixa); color:var(--text); }
+
+  .pid-osbl-grid{ display:grid; grid-template-columns:1fr 1fr; gap:3px 8px; margin-top:6px; }
+  .pid-osbl-item{ display:flex; align-items:center; justify-content:space-between; gap:4px; font-size:9.5px; color:var(--muted); }
+  .pid-osbl-item input{
+    width:48px; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:4px; padding:2px 4px; font-family:var(--mono); font-size:9.5px; text-align:right;
+  }
+  .pid-osbl-item input:focus{ outline:none; border-color:var(--baixa); }
+</style>
+</head>
+<body>
+
+<h1>Simulador de Balanço de Vapor — Diagrama de Processo</h1>
+<div class="subtitle">Mesma lógica de cascata Alta → Média → Baixa + TG1. Os valores agora são digitados direto nas caixas do diagrama.</div>
+
+<div class="toolbar">
+  <button class="primary" id="saveBtn">💾 Salvar dados</button>
+  <button id="loadBtn">📂 Carregar dados salvos</button>
+  <button class="secondary" id="exportBtn">📤 Exportar resultados (CSV)</button>
+  <span class="save-status" id="saveStatus"></span>
+</div>
+<div class="autosave-note">🔄 Suas alterações são salvas automaticamente neste navegador. Use os "Cenários" abaixo para guardar e comparar várias versões nomeadas.</div>
+
+<div class="scenario-bar">
+  <span class="scenario-label">Cenários salvos:</span>
+  <input type="text" id="scenarioName" placeholder="Nome do cenário (ex.: Regime normal)">
+  <button id="saveScenarioBtn">💾 Salvar cenário</button>
+  <select id="scenarioSelect"><option value="">— selecionar —</option></select>
+  <button id="loadScenarioBtn">📂 Carregar</button>
+  <button id="deleteScenarioBtn">🗑️ Excluir</button>
+  <button id="exportScenarioBtn">⬇️ Exportar .json</button>
+  <button id="importScenarioBtn">⬆️ Importar .json</button>
+  <input type="file" id="importScenarioFile" accept="application/json" style="display:none;">
+</div>
+
+<div class="summary">
+  <div class="card" id="cardAlta"><div class="k">Alta disponível para rebaixamento</div><div class="v" id="vAltaSaldo">–</div></div>
+  <div class="card" id="cardMedia"><div class="k">Média disponível para rebaixamento</div><div class="v" id="vMediaSaldo">–</div></div>
+  <div class="card" id="cardBaixa"><div class="k">Saldo final de Vapor Baixa</div><div class="v" id="vBaixaSaldo">–</div></div>
+  <div class="card hot" id="cardCond"><div class="k">Vapor pro Condensador (minimizar)</div><div class="v" id="vCond">–</div></div>
+</div>
+
+<div class="diagram-panel">
+  <h2>Diagrama de Processo — Balanço de Vapor</h2>
+  <div class="note" style="padding:0 0 8px;">Digite os valores direto nas caixas. Azul = header principal (Alta/Média/Baixa), cinza = consumo simples, vermelho = rebaixadora / produção própria / saída de turbobomba / excedente final.</div>
+  <div class="diagram-legend">
+    <span><span class="dot" style="background:#6ea8d8;"></span>Header / alimentação principal</span>
+    <span><span class="dot" style="background:#c7d0d9;"></span>Tomada de consumo</span>
+    <span><span class="dot" style="background:#d3707a;"></span>Rebaixadora / produção / excedente</span>
+    <span><span class="dot" style="background:#e2545a;"></span>Déficit</span>
+  </div>
+
+  <div class="diagram-wrap">
+    <div class="diagram-stage">
+      <svg id="flowSvg" viewBox="0 0 1220 970" xmlns="http://www.w3.org/2000/svg"></svg>
+
+      <!-- Hidden: memória de valores calculados, lidos pelo CSV/tabela de balanço -->
+      <input type="text" id="letdownAM" value="0,00" style="display:none">
+      <input type="text" id="tg1OutMedia" value="0,00" style="display:none">
+      <input type="text" id="tg1OutBaixa" value="0,00" style="display:none">
+      <input type="text" id="excessMB" value="0,00" style="display:none">
+
+      <!-- ===== Caldeiras (capacidade + turndown = "eficiência", igual ao outro simulador) ===== -->
+      <div class="pid-box" style="left:30px; top:30px; width:150px; height:104px; border-color:#e2725b;">
+        <div class="pid-title">C1</div>
+        <div class="pid-row"><span>Capac.</span><input type="number" id="c1Cap" value="35" step="0.5"><span>t/h</span></div>
+        <div class="pid-row"><span>Turndown</span><input type="number" id="c1Turndown" value="0" step="0.1" min="0" max="100"><span>%</span></div>
+        <div class="pid-row"><span>Produção</span><input type="number" id="c1Flow" value="0" step="0.1"><span>t/h</span></div>
+      </div>
+      <div class="pid-box" style="left:30px; top:144px; width:150px; height:104px; border-color:#e2725b;">
+        <div class="pid-title">C2</div>
+        <div class="pid-row"><span>Capac.</span><input type="number" id="c2Cap" value="35" step="0.5"><span>t/h</span></div>
+        <div class="pid-row"><span>Turndown</span><input type="number" id="c2Turndown" value="0" step="0.1" min="0" max="100"><span>%</span></div>
+        <div class="pid-row"><span>Produção</span><input type="number" id="c2Flow" value="0" step="0.1"><span>t/h</span></div>
+      </div>
+
+      <!-- ===== Partida de Alta (consumos extras viram caixas próprias, mais abaixo) ===== -->
+      <div class="pid-box" style="left:200px; top:262px; width:140px; height:56px; border-color:#e2725b;">
+        <div class="pid-title">Partida (Alta)</div>
+        <div class="pid-row" style="justify-content:center;"><span class="pid-readonly" id="partidaAltaBox">0,00 t/h</span></div>
+      </div>
+      <div id="extraBoxAlta" style="position:absolute; left:0; top:0;"></div>
+
+      <!-- ===== TurboM (TG1) ===== -->
+      <div class="pid-box" style="left:460px; top:55px; width:170px; height:160px; border-color:#e8edf2;">
+        <div class="pid-title">TurboM (TG1)</div>
+        <div class="pid-row"><span>Consumo Alta</span><input type="number" id="tg1In" value="0" step="0.1"></div>
+        <div class="pid-note">referência TG1 (t)</div>
+        <div class="pid-ref-row">
+          <input type="number" id="refAlta" value="0" step="0.1" title="Alta">A
+          →
+          <input type="number" id="refMedia" value="0" step="0.1" title="Média">M +
+          <input type="number" id="refBaixa" value="0" step="0.1" title="Baixa">B
+        </div>
+      </div>
+
+      <!-- ===== Caixas alimentadas por Média E Baixa ao mesmo tempo ===== -->
+      <div class="pid-box" style="left:830px; top:178px; width:160px; height:84px; border-color:#8695a4;">
+        <div class="pid-title">PTU</div>
+        <div class="pid-row"><span>Média</span><input type="number" id="ptu9" value="0" step="0.001"></div>
+        <div class="pid-row"><span>Baixa</span><input type="number" id="ptuBaixa" value="0" step="0.001"></div>
+      </div>
+      <div class="pid-box" style="left:830px; top:274px; width:160px; height:84px; border-color:#8695a4;">
+        <div class="pid-title">HEFA</div>
+        <div class="pid-row"><span>Consumo LP</span><input type="number" id="hefaRegimeLP" value="0" step="0.001"></div>
+        <div class="pid-row"><span>Produção MP</span><input type="number" id="hefaRegimeMP" value="0" step="0.001"></div>
+      </div>
+      <div class="pid-box" style="left:830px; top:370px; width:160px; height:84px; border-color:#8695a4;">
+        <div class="pid-title">HPU (UGH)</div>
+        <div class="pid-row"><span>Consumo LP</span><input type="number" id="ughConsumoLP" value="0" step="0.001"></div>
+        <div class="pid-row"><span>Produção MP</span><input type="number" id="ughRegimeMP" value="0" step="0.001"></div>
+      </div>
+      <div class="pid-box" style="left:830px; top:466px; width:160px; height:84px; border-color:#8695a4;">
+        <div class="pid-title">BioFCC</div>
+        <div class="pid-row"><span>Média</span><input type="number" id="biofccMP" value="0" step="0.1"></div>
+        <div class="pid-row"><span>Baixa</span><input type="number" id="biofccLP" value="0" step="0.1"></div>
+      </div>
+      <div class="pid-box" style="left:830px; top:564px; width:160px; height:80px; border-color:#8695a4;">
+        <div class="pid-title">Turbo Bomba HTP9</div>
+        <div class="pid-row"><span>Consumo MP</span><input type="number" id="tb1" value="0" step="0.1"></div>
+        <div class="pid-row"><span>→ Baixa</span><span class="pid-readonly" id="tb1out">0,00 t/h</span></div>
+      </div>
+      <div class="pid-box" style="left:830px; top:660px; width:160px; height:80px; border-color:#8695a4;">
+        <div class="pid-title">Turbo Bombas de Água</div>
+        <div class="pid-row"><span>Consumo MP</span><input type="number" id="tb2" value="0" step="0.1"></div>
+        <div class="pid-row"><span>→ Baixa</span><span class="pid-readonly" id="tb2out">0,00 t/h</span></div>
+      </div>
+
+      <!-- ===== Caixas alimentadas só por Baixa (esquerda do header) ===== -->
+      <div class="pid-box" style="left:550px; top:286px; width:160px; height:68px; border-color:#3fa7c9;">
+        <div class="pid-title">Desaerador</div>
+        <div class="pid-row"><span>Baixa</span><input type="number" id="desaerador" value="0" step="0.001"></div>
+      </div>
+      <div class="pid-box" style="left:520px; top:364px; width:190px; height:120px; border-color:#3fa7c9;">
+        <div class="pid-title">Aquec. Tanques OSBL</div>
+        <div class="pid-row" style="justify-content:center; margin-top:0;"><span class="pid-readonly" id="osblTotalDiagram">0,0000 t/h</span></div>
+        <div class="pid-osbl-grid">
+          <div class="pid-osbl-item"><span>150</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+          <div class="pid-osbl-item"><span>151</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+          <div class="pid-osbl-item"><span>074</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+          <div class="pid-osbl-item"><span>075</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+          <div class="pid-osbl-item"><span>161</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+          <div class="pid-osbl-item"><span>158</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+          <div class="pid-osbl-item"><span>159</span><input type="number" class="osbl" value="0" step="0.0001"></div>
+        </div>
+      </div>
+      <div class="pid-box" style="left:550px; top:492px; width:160px; height:68px; border-color:#3fa7c9;">
+        <div class="pid-title">Partida (Baixa)</div>
+        <div class="pid-row" style="justify-content:center;"><span class="pid-readonly" id="partidaBaixaBox">0,00 t/h</span></div>
+      </div>
+      <div id="extraBoxBaixa" style="position:absolute; left:0; top:0;"></div>
+
+      <!-- ===== Caixa alimentada só por Média (direita do header) ===== -->
+      <div class="pid-box" style="left:1050px; top:306px; width:150px; height:68px; border-color:#e0a934;">
+        <div class="pid-title">Partida (Média)</div>
+        <div class="pid-row" style="justify-content:center;"><span class="pid-readonly" id="partidaMediaBox">0,00 t/h</span></div>
+      </div>
+      <div id="extraBoxMedia" style="position:absolute; left:0; top:0;"></div>
+
+      <!-- ===== Condensador Auxiliar ===== -->
+      <div class="pid-box" id="condBoxEl" style="left:490px; top:850px; width:260px; height:92px; border-color:#4caf72;">
+        <div class="pid-title">Condensador Auxiliar</div>
+        <div class="pid-row" style="justify-content:center;"><span class="pid-readonly" id="condFlowDiag">0,00 t/h</span></div>
+        <div class="pid-row" style="justify-content:center;"><span class="pid-readonly" id="condPctDiag">0% da capacidade design</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="startup-panel">
+  <div class="startup-head">Consumos de Partida (Startup)</div>
+  <label class="startup-enable">
+    <input type="checkbox" id="isStartup">
+    é cenário de partida?
+  </label>
+  <div class="startup-list" id="startupList"></div>
+  <button class="startup-add" id="addStartupItem">+ Adicionar item de partida</button>
+  <div class="startup-total">
+    <span>Total de partida</span>
+    <span id="startupTotal">0,00 t/h</span>
+  </div>
+</div>
+
+<div class="condenser-panel">
+  <h2>Condensador Auxiliar — parâmetros</h2>
+  <div class="note" style="padding:0; font-family:var(--mono); font-size:11.5px; line-height:1.7;">
+    Duty (MJ/h) = Vazão excedente (t/h) × [h_LP − h_cond] (kJ/kg)<br>
+    Duty (Mcal/h) = Duty (MJ/h) × 0,238846<br>
+    Água de resfriamento (t/h) = Duty (Mcal/h) ÷ ΔT_CWS (°C)  <span style="color:var(--muted); font-family:var(--sans);">— considerando Cp da água ≈ 1 Mcal/(t·°C)</span>
+  </div>
+  <div class="cond-grid">
+    <div class="field"><label>Entalpia vapor Baixa (h_LP)</label><input type="number" id="hLP" value="2748" step="1"> <span style="font-size:10px;color:var(--muted)">kJ/kg</span></div>
+    <div class="field"><label>Entalpia condensado saída</label><input type="number" id="hCond" value="460.92" step="0.01"> <span style="font-size:10px;color:var(--muted)">kJ/kg</span></div>
+    <div class="field"><label>Capacidade design do condensador</label><input type="number" id="condDesign" value="60" step="1"> <span style="font-size:10px;color:var(--muted)">t/h</span></div>
+    <div class="field"><label>ΔT água de resfriamento (CWS)</label><input type="number" id="dtCW" value="15" step="0.5"> <span style="font-size:10px;color:var(--muted)">°C</span></div>
+  </div>
+  <div class="cond-grid" style="margin-top:18px;">
+    <div class="card" style="grid-column:span 1;"><div class="k">Vazão ao condensador</div><div class="v" id="condFlow">–</div></div>
+    <div class="card"><div class="k">Duty</div><div class="v" id="condDutyMJ">– <small>MJ/h</small></div></div>
+    <div class="card"><div class="k">Duty</div><div class="v" id="condDutyMcal">– <small>Mcal/h</small></div></div>
+    <div class="card"><div class="k">Água de resfriamento estimada</div><div class="v" id="condCW">– <small>t/h</small></div></div>
+  </div>
+  <div class="gauge-wrap">
+    <div class="gauge"><div class="gauge-fill" id="gaugeFill" style="width:0%; background:var(--ok);"></div></div>
+    <div class="gauge-marks"><span>0%</span><span id="gaugePct">0% da capacidade design</span><span>100%+</span></div>
+  </div>
+</div>
+
+<div class="condenser-panel" id="balancoGeralPanel">
+  <h2 style="color:var(--text);">Balanço Geral do Sistema</h2>
+  <div class="cond-grid" style="grid-template-columns:1fr 1fr; margin-top:14px;">
+    <div>
+      <div class="note" style="padding:0 0 6px;"><b>Entradas (fontes)</b></div>
+      <table style="width:100%; font-size:12.5px; font-family:var(--mono); border-collapse:collapse;" id="tblEntradas"></table>
+    </div>
+    <div>
+      <div class="note" style="padding:0 0 6px;"><b>Saídas (consumidores + condensador)</b></div>
+      <table style="width:100%; font-size:12.5px; font-family:var(--mono); border-collapse:collapse;" id="tblSaidas"></table>
+    </div>
+  </div>
+  <div class="cond-grid" style="margin-top:16px;">
+    <div class="card"><div class="k">Total Entradas</div><div class="v" id="totEntradas">–</div></div>
+    <div class="card"><div class="k">Total Saídas</div><div class="v" id="totSaidas">–</div></div>
+    <div class="card" id="cardFecha"><div class="k">Diferença (deve ≈ 0)</div><div class="v" id="totDiff">–</div></div>
+  </div>
+</div>
+
+<div class="footer-actions">
+  <button class="reset" id="resetBtn">↺ Restaurar valores originais</button>
+</div>
+
+<script>
+function num(id){ const el = document.getElementById(id); return parseFloat(el.value) || 0; }
+function set(id, val){ document.getElementById(id).textContent = val; }
+function fmt(v){ return (Math.round(v*1000)/1000).toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:3}); }
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, ch => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[ch]));
+}
+
+const PAL = {
+  alta:'#e2725b', altaBg:'#2a1a16',
+  media:'#e0a934', mediaBg:'#2a2114',
+  baixa:'#3fa7c9', baixaBg:'#122730',
+  ok:'#4caf72', danger:'#e2545a',
+  muted:'#8695a4', text:'#e8edf2', line:'#2a3542'
+};
+const WIRE = { blue:'#6ea8d8', red:'#d3707a', neutral:'#c7d0d9' };
+const MEDIA_X = 1030, BAIXA_X = 730;
+
+const startupCheckbox = document.getElementById('isStartup');
+let autosaveTimer = null;
+let lastResults = {};
+let c1Source = 'turndown';
+let c2Source = 'turndown';
+
+// Capacidade × turndown = produção (a mesma "eficiência" do outro simulador),
+// funcionando nos dois sentidos: digitar o turndown calcula a produção, e
+// digitar a produção direto recalcula o turndown correspondente.
+function boilerFlow(prefix, source){
+  const cap = num(prefix + 'Cap');
+  if (source === 'production'){
+    const flow = num(prefix + 'Flow');
+    const td = cap > 0 ? (flow/cap*100) : 0;
+    document.getElementById(prefix + 'Turndown').value = Math.round(td*100)/100;
+    return flow;
+  }
+  const td = num(prefix + 'Turndown');
+  const flow = cap * (td/100);
+  document.getElementById(prefix + 'Flow').value = Math.round(flow*1000)/1000;
+  return flow;
+}
+
+let startupItems = [
+  {name:'UGH — Partida', pressure:'alta', flow:0},
+  {name:'HEFA — Partida', pressure:'baixa', flow:0},
+  {name:'BioFCC — Partida', pressure:'baixa', flow:0}
+];
+
+let extraConsumptions = { alta: [], media: [], baixa: [] };
+
+// Colunas onde as caixas extras de cada nível são empilhadas dentro do
+// próprio diagrama, e a partir de que Y cada coluna começa (logo abaixo
+// da caixa "Partida" correspondente).
+const EXTRA_COL = {
+  alta:  {x:200,  w:140, startY:332, containerId:'extraBoxAlta'},
+  media: {x:1050, w:150, startY:388, containerId:'extraBoxMedia'},
+  baixa: {x:550,  w:160, startY:574, containerId:'extraBoxBaixa'}
+};
+const EXTRA_ROW_H = 66;   // espaçamento vertical entre caixas extras
+const EXTRA_BOX_H = 56;
+
+function extraBoxTop(level, index){ return EXTRA_COL[level].startY + index*EXTRA_ROW_H; }
+
+function renderExtraConsumptions(level){
+  const col = EXTRA_COL[level];
+  const container = document.getElementById(col.containerId);
+  const items = extraConsumptions[level];
+
+  let html = items.map((item,index)=>`
+    <div class="pid-box pid-extra" data-index="${index}" style="left:${col.x}px; top:${extraBoxTop(level,index)}px; width:${col.w}px; height:${EXTRA_BOX_H}px; border-color:${PAL[level]};">
+      <input type="text" class="pid-extra-name" value="${escapeHtml(item.name)}">
+      <div class="pid-row">
+        <input type="number" class="pid-extra-flow" value="${item.flow}" step="0.1">
+        <span>t/h</span>
+        <button type="button" class="pid-extra-del" title="Excluir caixa">×</button>
+      </div>
+    </div>
+  `).join('');
+
+  const addTop = extraBoxTop(level, items.length);
+  html += `<button type="button" class="pid-add-btn" style="left:${col.x}px; top:${addTop}px; width:${col.w}px;">+ caixa</button>`;
+  container.innerHTML = html;
+
+  container.querySelectorAll('.pid-extra').forEach(box=>{
+    const index = Number(box.dataset.index);
+    box.querySelector('.pid-extra-name').addEventListener('input', e=>{
+      extraConsumptions[level][index].name = e.target.value; calc();
+    });
+    box.querySelector('.pid-extra-flow').addEventListener('input', e=>{
+      extraConsumptions[level][index].flow = parseFloat(e.target.value) || 0; calc();
+    });
+    box.querySelector('.pid-extra-del').addEventListener('click', ()=>{
+      extraConsumptions[level].splice(index,1);
+      renderExtraConsumptions(level);
+      calc();
+    });
+  });
+
+  container.querySelector('.pid-add-btn').addEventListener('click', ()=>{
+    extraConsumptions[level].push({name:'Nova caixa', flow:0});
+    renderExtraConsumptions(level);
+    calc();
+  });
+}
+
+function renderAllExtraConsumptions(){
+  renderExtraConsumptions('alta'); renderExtraConsumptions('media'); renderExtraConsumptions('baixa');
+}
+
+function getExtraConsumptionTotal(level){
+  return extraConsumptions[level].reduce((sum,item)=>sum+(Number(item.flow)||0),0);
+}
+
+// Ponto mais baixo ocupado por cada coluna (caixa "Partida" + extras),
+// usado pra saber se o Condensador precisa descer pra abrir espaço.
+function extraColumnBottom(level){
+  const n = extraConsumptions[level].length;
+  const partidaBottom = { alta:318, media:374, baixa:560 }[level];
+  if (n === 0) return partidaBottom;
+  return extraBoxTop(level, n-1) + EXTRA_BOX_H;
+}
+
+function renderStartupItems(){
+  const list = document.getElementById('startupList');
+  list.innerHTML = startupItems.map((item,index)=>`
+    <div class="startup-item" data-index="${index}">
+      <input type="text" class="startup-name" value="${escapeHtml(item.name)}">
+      <select class="startup-pressure">
+        <option value="alta" ${item.pressure==='alta'?'selected':''}>Alta</option>
+        <option value="media" ${item.pressure==='media'?'selected':''}>Média</option>
+        <option value="baixa" ${item.pressure==='baixa'?'selected':''}>Baixa</option>
+      </select>
+      <input type="number" class="startup-flow" value="${item.flow}" min="0" step="0.1">
+      <span class="startup-unit">t/h</span>
+      <button class="startup-delete" title="Excluir item">×</button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.startup-item').forEach(row=>{
+    const index = Number(row.dataset.index);
+    row.querySelector('.startup-name').addEventListener('input', e=>{ startupItems[index].name = e.target.value; calc(); });
+    row.querySelector('.startup-pressure').addEventListener('change', e=>{ startupItems[index].pressure = e.target.value; calc(); });
+    row.querySelector('.startup-flow').addEventListener('input', e=>{ startupItems[index].flow = parseFloat(e.target.value) || 0; calc(); });
+    row.querySelector('.startup-delete').addEventListener('click', ()=>{ startupItems.splice(index,1); renderStartupItems(); calc(); });
+  });
+
+  const disabled = !startupCheckbox.checked;
+  list.querySelectorAll('input,select,button').forEach(el=> el.disabled = disabled);
+}
+
+function getStartupByPressure(){
+  const totals = {alta:0, media:0, baixa:0};
+  if (!startupCheckbox.checked){ set('startupTotal','0,00 t/h'); return totals; }
+  let total = 0;
+  startupItems.forEach(item=>{
+    const flow = Number(item.flow) || 0;
+    totals[item.pressure] += flow;
+    total += flow;
+  });
+  set('startupTotal', fmt(total) + ' t/h');
+  return totals;
+}
+
+// ================= LINHAS DO DIAGRAMA (SVG) =================
+// Só desenha linhas, setas e rótulos não-interativos — as caixas com
+// inputs são HTML estático (nunca recriado), pra não perder o foco
+// enquanto o usuário digita.
+function wire(pts, color, marker){
+  const d = pts.map((p,i)=> (i===0?'M':'L') + p[0] + ',' + p[1]).join(' ');
+  const m = marker ? ` marker-end="url(#${marker})"` : '';
+  return `<path d="${d}" stroke="${color}" stroke-width="2.2" fill="none"${m}/>`;
+}
+function trunk(pts, color){
+  const d = pts.map((p,i)=> (i===0?'M':'L') + p[0] + ',' + p[1]).join(' ');
+  return `<path d="${d}" stroke="${color}" stroke-width="3" fill="none"/>`;
+}
+
+function renderFlowDiagram(v){
+  const svg = document.getElementById('flowSvg');
+  if (!svg) return;
+  const parts = [];
+
+  parts.push(`<defs>
+    <marker id="mk-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="${WIRE.blue}"/></marker>
+    <marker id="mk-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="${WIRE.red}"/></marker>
+    <marker id="mk-neutral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="${WIRE.neutral}"/></marker>
+  </defs>`);
+
+  // ---------- Caldeiras + header de Alta ----------
+  parts.push(wire([[180,82],[220,82],[220,140]], WIRE.blue, 'mk-blue'));
+  parts.push(wire([[180,196],[220,196],[220,140]], WIRE.blue, 'mk-blue'));
+  parts.push(wire([[220,140],[460,140]], WIRE.blue, 'mk-blue'));
+  parts.push(`<text x="225" y="132" font-family="var(--sans)" font-size="11" fill="${PAL.alta}" font-weight="700">ALTA — 60 kgf/cm²g</text>`);
+
+  parts.push(wire([[270,140],[270,262]], WIRE.neutral, 'mk-neutral'));
+
+  if (v.deficitAlta > 0){
+    parts.push(`<text x="205" y="30" font-family="var(--mono)" font-size="10.5" fill="${PAL.danger}">⚠ Déficit de Alta: ${fmt(v.deficitAlta)} t/h</text>`);
+  }
+
+  // ---------- TurboM ----------
+  parts.push(wire([[545,215],[545,248]], WIRE.blue, 'mk-blue'));
+  parts.push(`<text x="545" y="262" text-anchor="middle" font-family="var(--sans)" font-size="10.5" fill="${PAL.muted}">⚡ Energia</text>`);
+  parts.push(wire([[630,95],[MEDIA_X,95]], WIRE.blue, 'mk-blue'));
+  parts.push(`<text x="800" y="87" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="${PAL.muted}">m (Média): ${fmt(v.tg1OutMedia)} t/h</text>`);
+  parts.push(wire([[630,175],[BAIXA_X,175]], WIRE.blue, 'mk-blue'));
+  parts.push(`<text x="670" y="167" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="${PAL.muted}">b (Baixa): ${fmt(v.tg1OutBaixa)} t/h</text>`);
+
+  // ---------- ties dos consumidores (Y de cada caixa, alinhado com o HTML) ----------
+  const ROW = { ptu:220, hefa:316, ugh:412, biofcc:508, htp9:604, tbomb:700 };
+  const BAIXA_SOLO = { desaerador:320, osbl:424, partida:526 };
+  const MEDIA_SOLO_Y = 340;
+
+  // PTU: consumo dos dois lados
+  parts.push(wire([[BAIXA_X,ROW.ptu],[830,ROW.ptu]], WIRE.neutral, 'mk-neutral'));
+  parts.push(wire([[MEDIA_X,ROW.ptu],[990,ROW.ptu]], WIRE.neutral, 'mk-neutral'));
+
+  // HEFA: consome Baixa, produz Média
+  parts.push(wire([[BAIXA_X,ROW.hefa],[830,ROW.hefa]], WIRE.neutral, 'mk-neutral'));
+  parts.push(wire([[990,ROW.hefa],[MEDIA_X,ROW.hefa]], WIRE.red, 'mk-red'));
+
+  // UGH: consome Baixa, produz Média
+  parts.push(wire([[BAIXA_X,ROW.ugh],[830,ROW.ugh]], WIRE.neutral, 'mk-neutral'));
+  parts.push(wire([[990,ROW.ugh],[MEDIA_X,ROW.ugh]], WIRE.red, 'mk-red'));
+
+  // BioFCC: consumo dos dois lados
+  parts.push(wire([[BAIXA_X,ROW.biofcc],[830,ROW.biofcc]], WIRE.neutral, 'mk-neutral'));
+  parts.push(wire([[MEDIA_X,ROW.biofcc],[990,ROW.biofcc]], WIRE.neutral, 'mk-neutral'));
+
+  // Turbo Bomba HTP9: consome Média, sai 100% como Baixa
+  parts.push(wire([[MEDIA_X,ROW.htp9],[990,ROW.htp9]], WIRE.neutral, 'mk-neutral'));
+  parts.push(wire([[830,ROW.htp9],[BAIXA_X,ROW.htp9]], WIRE.red, 'mk-red'));
+
+  // Turbo Bombas de Água: consome Média, sai 100% como Baixa
+  parts.push(wire([[MEDIA_X,ROW.tbomb],[990,ROW.tbomb]], WIRE.neutral, 'mk-neutral'));
+  parts.push(wire([[830,ROW.tbomb],[BAIXA_X,ROW.tbomb]], WIRE.red, 'mk-red'));
+
+  // Caixas simples de Baixa (à esquerda do header)
+  Object.values(BAIXA_SOLO).forEach(y=>{
+    parts.push(wire([[BAIXA_X,y],[710,y]], WIRE.neutral, 'mk-neutral'));
+  });
+
+  // Caixa simples de Média (à direita do header)
+  parts.push(wire([[MEDIA_X,MEDIA_SOLO_Y],[1050,MEDIA_SOLO_Y]], WIRE.neutral, 'mk-neutral'));
+
+  // Caixas extras (adicionadas pelo usuário — "+ caixa" em cada header)
+  ['alta','media','baixa'].forEach(level=>{
+    const col = EXTRA_COL[level];
+    extraConsumptions[level].forEach((item,i)=>{
+      const boxTop = extraBoxTop(level,i);
+      const boxCenter = boxTop + EXTRA_BOX_H/2;
+      if (level === 'alta'){
+        const cx = col.x + col.w/2;
+        parts.push(wire([[cx,110],[cx,boxTop]], WIRE.neutral, 'mk-neutral'));
+      } else if (level === 'media'){
+        parts.push(wire([[MEDIA_X,boxCenter],[col.x,boxCenter]], WIRE.neutral, 'mk-neutral'));
+      } else {
+        parts.push(wire([[BAIXA_X,boxCenter],[col.x+col.w,boxCenter]], WIRE.neutral, 'mk-neutral'));
+      }
+    });
+  });
+
+  // ---------- Rebaixadora Alta → Média (fixa, perto do topo) ----------
+  parts.push(wire([[350,110],[350,20],[MEDIA_X,20],[MEDIA_X,60]], WIRE.red, 'mk-red'));
+  parts.push(`<text x="690" y="15" text-anchor="middle" font-family="var(--mono)" font-size="10.5" fill="${WIRE.red}">Rebaixadora Alta → Média: ${fmt(v.letdownAM)} t/h</text>`);
+
+  // ---------- layout dinâmico: a coluna mais alta empurra rebaixadora 2,
+  // o excedente e o Condensador pra baixo, abrindo espaço pras caixas extras ----------
+  const dualBottom = ROW.tbomb + 40; // base da coluna de caixas duplas (Turbo Bombas de Água)
+  const baseBottom = Math.max(dualBottom, extraColumnBottom('alta'), extraColumnBottom('media'), extraColumnBottom('baixa'));
+  const rebaixY = baseBottom + 50;
+  const excTapY = rebaixY + 60;
+  const condTop = excTapY + 40;
+  const stageHeight = condTop + 120;
+
+  document.getElementById('condBoxEl').style.top = condTop + 'px';
+  const stageEl = document.querySelector('.diagram-stage');
+  stageEl.style.height = stageHeight + 'px';
+  svg.setAttribute('viewBox', `0 0 1220 ${stageHeight}`);
+  svg.style.height = stageHeight + 'px';
+
+  // ---------- headers verticais ----------
+  parts.push(trunk([[MEDIA_X,60],[MEDIA_X,rebaixY+15]], WIRE.blue));
+  parts.push(trunk([[BAIXA_X,175],[BAIXA_X,excTapY+15]], WIRE.blue));
+  parts.push(`<text x="1045" y="150" font-family="var(--sans)" font-size="11.5" font-weight="700" fill="${PAL.media}">MÉDIA — 15 kgf/cm²g</text>`);
+  parts.push(`<text x="745" y="145" font-family="var(--sans)" font-size="11.5" font-weight="700" fill="${PAL.baixa}">BAIXA — 3,5 kgf/cm²g</text>`);
+
+  if (v.deficitMedia > 0){
+    parts.push(`<text x="1045" y="168" font-family="var(--mono)" font-size="10.5" fill="${PAL.danger}">⚠ Déficit Média: ${fmt(v.deficitMedia)} t/h</text>`);
+  }
+  if (v.deficitBaixa > 0){
+    parts.push(`<text x="745" y="163" font-family="var(--mono)" font-size="10.5" fill="${PAL.danger}">⚠ Déficit Baixa: ${fmt(v.deficitBaixa)} t/h</text>`);
+  }
+
+  // ---------- Rebaixadora Média → Baixa ----------
+  parts.push(wire([[MEDIA_X,rebaixY],[BAIXA_X,rebaixY]], WIRE.red, 'mk-red'));
+  parts.push(`<text x="880" y="${rebaixY-8}" text-anchor="middle" font-family="var(--mono)" font-size="10.5" fill="${WIRE.red}">Rebaixadora Média → Baixa: ${fmt(v.excessMB)} t/h</text>`);
+
+  // ---------- Excedente final -> Condensador ----------
+  parts.push(wire([[BAIXA_X,excTapY],[BAIXA_X,excTapY+20],[750,excTapY+20]], WIRE.red, 'mk-red'));
+  parts.push(`<text x="700" y="${excTapY+12}" text-anchor="middle" font-family="var(--mono)" font-size="10.5" fill="${WIRE.red}">excedente</text>`);
+
+  svg.innerHTML = parts.join('');
+}
+
+function calc(){
+  const isStartup = startupCheckbox.checked;
+  const startup = getStartupByPressure();
+  const startupAlta = startup.alta;
+  const startupMedia = startup.media;
+  const startupBaixa = startup.baixa;
+
+  // --- TG1: consome Alta e descarrega em Média + Baixa ---
+  const refAlta = num('refAlta') || 1;
+  const refMedia = num('refMedia');
+  const refBaixa = num('refBaixa');
+  const tg1In = num('tg1In');
+  const tg1OutMedia = tg1In * (refMedia/refAlta);
+  const tg1OutBaixa = tg1In * (refBaixa/refAlta);
+  document.getElementById('tg1OutMedia').value = fmt(tg1OutMedia);
+  document.getElementById('tg1OutBaixa').value = fmt(tg1OutBaixa);
+
+  // --- Turbobombas HTP9 e Turbo Bombas de Água: consomem Média, saem integralmente como Baixa ---
+  const tb1 = num('tb1');
+  const tb2 = num('tb2');
+  set('tb1out', fmt(tb1) + ' t/h');
+  set('tb2out', fmt(tb2) + ' t/h');
+
+  // --- ALTA: caldeiras C1 + C2 (capacidade × turndown) ---
+  const c1Flow = boilerFlow('c1', c1Source);
+  const c2Flow = boilerFlow('c2', c2Source);
+  const producaoAlta = c1Flow + c2Flow;
+
+  const outrosAlta = startupAlta + getExtraConsumptionTotal('alta');
+  set('partidaAltaBox', fmt(startupAlta) + ' t/h');
+  const consumoAlta = tg1In + outrosAlta;
+  const saldoAltaBruto = producaoAlta - consumoAlta;
+
+  const letdownAM = Math.max(0, saldoAltaBruto);
+  const deficitAlta = Math.max(0, -saldoAltaBruto);
+  document.getElementById('letdownAM').value = fmt(letdownAM);
+
+  // --- MÉDIA ---
+  const hefaRegimeMP = num('hefaRegimeMP');
+  const ughRegimeMP = num('ughRegimeMP');
+  const producaoMedia = tg1OutMedia + hefaRegimeMP + ughRegimeMP + letdownAM;
+
+  const ptu9 = num('ptu9');
+  const biofccMP = num('biofccMP');
+  const outrosMedia = startupMedia + getExtraConsumptionTotal('media');
+  set('partidaMediaBox', fmt(startupMedia) + ' t/h');
+  const consumoMedia = ptu9 + biofccMP + tb1 + tb2 + outrosMedia;
+
+  const saldoMediaBruto = producaoMedia - consumoMedia;
+  const excessMB = Math.max(0, saldoMediaBruto);
+  const deficitMedia = Math.max(0, -saldoMediaBruto);
+  document.getElementById('excessMB').value = fmt(excessMB);
+
+  // --- OSBL ---
+  let osblSum = 0;
+  document.querySelectorAll('.osbl').forEach(inp=>{ osblSum += parseFloat(inp.value) || 0; });
+  set('osblTotalDiagram', fmt(osblSum) + ' t/h');
+
+  // --- BAIXA ---
+  const producaoBaixa = tg1OutBaixa + tb1 + tb2 + excessMB;
+
+  const ptuBaixa = num('ptuBaixa');
+  const desaerador = num('desaerador');
+  const hefaRegimeLP = num('hefaRegimeLP');
+  const biofccLP = num('biofccLP');
+  const ughConsumoLP = num('ughConsumoLP');
+  const outrosBaixa = startupBaixa + getExtraConsumptionTotal('baixa');
+  set('partidaBaixaBox', fmt(startupBaixa) + ' t/h');
+  const consumoBaixa = outrosBaixa + ptuBaixa + desaerador + hefaRegimeLP + biofccLP + ughConsumoLP + osblSum;
+
+  const saldoBaixa = producaoBaixa - consumoBaixa;
+  const condFlow = Math.max(0, saldoBaixa);
+  const deficitBaixa = Math.max(0, -saldoBaixa);
+
+  // ---- Cards resumo ----
+  set('vAltaSaldo', deficitAlta > 0 ? 'DÉFICIT ' + fmt(deficitAlta) + ' t/h' : fmt(letdownAM) + ' t/h rebaixado');
+  set('vMediaSaldo', deficitMedia > 0 ? 'DÉFICIT ' + fmt(deficitMedia) + ' t/h' : fmt(excessMB) + ' t/h rebaixado');
+  set('vBaixaSaldo', deficitBaixa > 0 ? 'DÉFICIT ' + fmt(deficitBaixa) + ' t/h' : '+' + fmt(saldoBaixa) + ' t/h');
+  set('vCond', fmt(condFlow) + ' t/h');
+
+  document.getElementById('cardAlta').className = 'card' + (deficitAlta > 0 ? ' hot' : ' cool');
+  document.getElementById('cardMedia').className = 'card' + (deficitMedia > 0 ? ' hot' : ' cool');
+  document.getElementById('cardBaixa').className = 'card' + (deficitBaixa > 0 ? ' hot' : ' cool');
+
+  // ---- Condensador ----
+  const hLP = num('hLP');
+  const hCond = num('hCond');
+  const design = num('condDesign') || 1;
+  const dtCW = num('dtCW') || 1;
+  const dutyMJ = condFlow * (hLP - hCond);
+  const dutyMcal = dutyMJ * 0.238846;
+  const cwFlow = dutyMcal > 0 ? dutyMcal / dtCW : 0;
+
+  set('condFlow', fmt(condFlow) + ' t/h');
+  set('condDutyMJ', fmt(dutyMJ));
+  set('condDutyMcal', fmt(dutyMcal));
+  set('condCW', fmt(cwFlow));
+  set('condFlowDiag', fmt(condFlow) + ' t/h');
+
+  const pct = Math.min(140, (condFlow/design)*100);
+  const fill = document.getElementById('gaugeFill');
+  fill.style.width = Math.min(100,pct) + '%';
+  fill.style.background = pct > 100 ? 'var(--danger)' : (pct > 70 ? 'var(--media)' : 'var(--ok)');
+  set('gaugePct', Math.round(pct) + '% da capacidade design (' + fmt(design) + ' t/h)');
+  set('condPctDiag', Math.round(pct) + '% da capacidade design');
+  document.getElementById('condBoxEl').style.borderColor = pct>100 ? PAL.danger : (pct>70 ? PAL.media : PAL.ok);
+
+  // ---- Diagrama (só linhas/rótulos, sem inputs) ----
+  renderFlowDiagram({
+    deficitAlta, letdownAM, tg1OutMedia, tg1OutBaixa,
+    deficitMedia, excessMB, deficitBaixa
+  });
+
+  // ---- BALANÇO GERAL ----
+  const entradas = [
+    ['Caldeira C1 (Alta)', c1Flow],
+    ['Caldeira C2 (Alta)', c2Flow],
+    ['HEFA — produção em Média', hefaRegimeMP],
+    ['UGH — produção em Média', ughRegimeMP]
+  ];
+
+  const saidas = [
+    ['PTU — Média', ptu9],
+    ['BioFCC — consumo (Média)', biofccMP],
+    ['PTU (Baixa)', ptuBaixa],
+    ['Desaerador (Baixa)', desaerador],
+    ['HEFA — Regime (Baixa)', hefaRegimeLP],
+    ['BioFCC — consumo (Baixa)', biofccLP],
+    ['UGH — Consumo (Baixa)', ughConsumoLP],
+    ['Aquecimento Tanques OSBL (Baixa)', osblSum],
+    ['Condensador (excedente final)', condFlow]
+  ];
+
+  if (isStartup){
+    startupItems.forEach(item=>{
+      const pressureLabel = item.pressure === 'alta' ? 'Alta' : item.pressure === 'media' ? 'Média' : 'Baixa';
+      saidas.push([`${item.name || 'Item de partida'} (${pressureLabel})`, Number(item.flow) || 0]);
+    });
+  }
+
+  ['alta','media','baixa'].forEach(level=>{
+    const pressureLabel = level === 'alta' ? 'Alta' : level === 'media' ? 'Média' : 'Baixa';
+    extraConsumptions[level].forEach(item=>{
+      saidas.push([`${item.name || 'Consumo adicional'} (${pressureLabel})`, Number(item.flow) || 0]);
+    });
+  });
+
+  if (deficitAlta > 0) entradas.push(['⚠ Necessidade adicional de Alta', deficitAlta]);
+  if (deficitMedia > 0) entradas.push(['⚠ Necessidade adicional de Média', deficitMedia]);
+  if (deficitBaixa > 0) entradas.push(['⚠ Necessidade adicional de Baixa', deficitBaixa]);
+
+  function renderTable(elId, rows, total){
+    const el = document.getElementById(elId);
+    el.innerHTML = rows.map(r=>`<tr><td>${escapeHtml(r[0])}</td><td>${fmt(r[1])} t/h</td></tr>`).join('') +
+      `<tr><td>Total</td><td>${fmt(total)} t/h</td></tr>`;
+  }
+
+  const totalEntradas = entradas.reduce((a,r)=>a+r[1],0);
+  const totalSaidas = saidas.reduce((a,r)=>a+r[1],0);
+  renderTable('tblEntradas', entradas, totalEntradas);
+  renderTable('tblSaidas', saidas, totalSaidas);
+  set('totEntradas', fmt(totalEntradas) + ' t/h');
+  set('totSaidas', fmt(totalSaidas) + ' t/h');
+
+  const diff = totalEntradas - totalSaidas;
+  set('totDiff', (diff >= 0 ? '+' : '') + fmt(diff) + ' t/h');
+  document.getElementById('cardFecha').className = 'card' + (Math.abs(diff) > 0.05 ? ' hot' : ' cool');
+
+  lastResults = { producaoAlta, deficitAlta, letdownAM, deficitMedia, excessMB, saldoBaixa, deficitBaixa, condFlow, dutyMcal, cwFlow };
+
+  scheduleAutosave();
+}
+
+document.querySelectorAll('input[type=number]').forEach(inp=>{
+  if (['c1Flow','c1Turndown','c2Flow','c2Turndown'].includes(inp.id)) return; // tratados abaixo com controle de origem
+  inp.addEventListener('input', calc);
+});
+document.getElementById('c1Flow').addEventListener('input', ()=>{ c1Source = 'production'; calc(); });
+document.getElementById('c1Turndown').addEventListener('input', ()=>{ c1Source = 'turndown'; calc(); });
+document.getElementById('c2Flow').addEventListener('input', ()=>{ c2Source = 'production'; calc(); });
+document.getElementById('c2Turndown').addEventListener('input', ()=>{ c2Source = 'turndown'; calc(); });
+
+document.getElementById('isStartup').addEventListener('change', ()=>{ renderStartupItems(); calc(); });
+document.getElementById('addStartupItem').addEventListener('click', ()=>{
+  startupItems.push({name:'Novo item de partida', pressure:'baixa', flow:0});
+  renderStartupItems(); calc();
+});
+
+const defaults = {};
+document.querySelectorAll('input[type=number]:not(.osbl)').forEach(inp=>{ defaults[inp.id]=inp.value; });
+const osblDefaults = Array.from(document.querySelectorAll('.osbl')).map(i=>i.value);
+
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  Object.keys(defaults).forEach(id=>{ document.getElementById(id).value = defaults[id]; });
+  document.querySelectorAll('.osbl').forEach((inp,i)=>{ inp.value = osblDefaults[i]; });
+  document.getElementById('isStartup').checked = false;
+  startupItems = [
+    {name:'UGH — Partida', pressure:'alta', flow:0},
+    {name:'HEFA — Partida', pressure:'baixa', flow:0},
+    {name:'BioFCC — Partida', pressure:'baixa', flow:0}
+  ];
+  extraConsumptions = {alta:[], media:[], baixa:[]};
+  c1Source = 'turndown';
+  c2Source = 'turndown';
+  renderStartupItems();
+  renderAllExtraConsumptions();
+  calc();
+});
+
+renderStartupItems();
+renderAllExtraConsumptions();
+calc();
+
+// ================= SALVAR / CARREGAR / EXPORTAR =================
+
+const STORAGE_KEY = 'balancoVaporFluxo_v2';
+const SCENARIOS_KEY = 'balancoVaporFluxoCenarios_v2';
+
+function scheduleAutosave(){
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(()=>{
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(collectState())); }catch(e){}
+  }, 600);
+}
+
+function collectState(){
+  const inputs = {};
+  document.querySelectorAll('input[type=number]:not(.osbl)').forEach(inp=>{ inputs[inp.id] = inp.value; });
+  const osblValues = Array.from(document.querySelectorAll('.osbl')).map(i=>i.value);
+  return {
+    savedAt: new Date().toISOString(), inputs, osblValues,
+    isStartup: document.getElementById('isStartup').checked,
+    startupItems, extraConsumptions, c1Source, c2Source
+  };
+}
+
+function applyState(state){
+  if (!state) return;
+  Object.keys(state.inputs || {}).forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.value = state.inputs[id];
+  });
+  document.querySelectorAll('.osbl').forEach((inp,i)=>{
+    if (state.osblValues && state.osblValues[i] !== undefined) inp.value = state.osblValues[i];
+  });
+  document.getElementById('isStartup').checked = !!state.isStartup;
+  if (state.startupItems) startupItems = state.startupItems;
+  if (state.extraConsumptions) extraConsumptions = state.extraConsumptions;
+  if (state.c1Source) c1Source = state.c1Source;
+  if (state.c2Source) c2Source = state.c2Source;
+  renderStartupItems();
+  renderAllExtraConsumptions();
+  calc();
+}
+
+function showStatus(msg){
+  const el = document.getElementById('saveStatus');
+  el.textContent = msg;
+  setTimeout(()=>{ if (el.textContent === msg) el.textContent = ''; }, 4000);
+}
+
+document.getElementById('saveBtn').addEventListener('click', ()=>{
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(collectState()));
+    showStatus('✔ Dados salvos neste navegador em ' + new Date().toLocaleString('pt-BR'));
+  }catch(e){ showStatus('✖ Não foi possível salvar (armazenamento indisponível)'); }
+});
+
+document.getElementById('loadBtn').addEventListener('click', ()=>{
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw){ showStatus('Nenhum dado salvo encontrado neste navegador'); return; }
+    applyState(JSON.parse(raw));
+    showStatus('✔ Dados carregados');
+  }catch(e){ showStatus('✖ Erro ao carregar dados salvos'); }
+});
+
+(function autoLoad(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw){ applyState(JSON.parse(raw)); showStatus('Dados salvos anteriormente foram carregados automaticamente'); }
+  }catch(e){}
+})();
+
+function loadScenariosMap(){
+  try{ return JSON.parse(localStorage.getItem(SCENARIOS_KEY)) || {}; }catch(e){ return {}; }
+}
+function saveScenariosMap(map){
+  try{ localStorage.setItem(SCENARIOS_KEY, JSON.stringify(map)); return true; }catch(e){ return false; }
+}
+function refreshScenarioSelect(){
+  const map = loadScenariosMap();
+  const select = document.getElementById('scenarioSelect');
+  const names = Object.keys(map).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const current = select.value;
+  select.innerHTML = '<option value="">— selecionar —</option>' +
+    names.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  if (names.includes(current)) select.value = current;
+}
+
+document.getElementById('saveScenarioBtn').addEventListener('click', ()=>{
+  const name = document.getElementById('scenarioName').value.trim();
+  if (!name){ showStatus('Digite um nome para o cenário'); return; }
+  const map = loadScenariosMap();
+  if (map[name] && !confirm('Já existe um cenário chamado "' + name + '". Deseja sobrescrever?')) return;
+  map[name] = collectState();
+  if (!saveScenariosMap(map)){ showStatus('✖ Não foi possível salvar o cenário (armazenamento indisponível)'); return; }
+  refreshScenarioSelect();
+  document.getElementById('scenarioSelect').value = name;
+  showStatus('✔ Cenário "' + name + '" salvo');
+});
+
+document.getElementById('loadScenarioBtn').addEventListener('click', ()=>{
+  const name = document.getElementById('scenarioSelect').value;
+  if (!name){ showStatus('Selecione um cenário para carregar'); return; }
+  const map = loadScenariosMap();
+  if (!map[name]){ showStatus('Cenário não encontrado'); return; }
+  applyState(map[name]);
+  document.getElementById('scenarioName').value = name;
+  showStatus('✔ Cenário "' + name + '" carregado');
+});
+
+document.getElementById('deleteScenarioBtn').addEventListener('click', ()=>{
+  const name = document.getElementById('scenarioSelect').value;
+  if (!name){ showStatus('Selecione um cenário para excluir'); return; }
+  if (!confirm('Excluir o cenário "' + name + '"?')) return;
+  const map = loadScenariosMap();
+  delete map[name];
+  if (!saveScenariosMap(map)){ showStatus('✖ Não foi possível excluir (armazenamento indisponível)'); return; }
+  refreshScenarioSelect();
+  showStatus('🗑️ Cenário "' + name + '" excluído');
+});
+
+document.getElementById('exportScenarioBtn').addEventListener('click', ()=>{
+  const name = document.getElementById('scenarioSelect').value;
+  const map = loadScenariosMap();
+  let payload;
+  if (name && map[name]){ payload = { type:'cenario-unico', nome:name, dados: map[name] }; }
+  else { payload = { type:'todos-cenarios', dados: map }; }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (name ? 'cenario_' + name.replace(/\s+/g,'_') : 'cenarios_balanco_vapor_fluxo') + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showStatus('✔ Arquivo exportado');
+});
+
+document.getElementById('importScenarioBtn').addEventListener('click', ()=>{
+  document.getElementById('importScenarioFile').click();
+});
+
+document.getElementById('importScenarioFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt)=>{
+    try{
+      const payload = JSON.parse(evt.target.result);
+      const map = loadScenariosMap();
+      if (payload.type === 'cenario-unico' && payload.nome && payload.dados){ map[payload.nome] = payload.dados; }
+      else if (payload.type === 'todos-cenarios' && payload.dados){ Object.assign(map, payload.dados); }
+      else if (payload.inputs){ map[file.name.replace(/\.json$/i,'')] = payload; }
+      else { throw new Error('formato inválido'); }
+      if (!saveScenariosMap(map)){ showStatus('✖ Não foi possível importar (armazenamento indisponível)'); e.target.value = ''; return; }
+      refreshScenarioSelect();
+      showStatus('✔ Cenário(s) importado(s)');
+    }catch(err){ showStatus('✖ Arquivo inválido'); }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+refreshScenarioSelect();
+
+function csvEscape(v){
+  const s = String(v);
+  return /[",;\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  calc();
+  const rows = [];
+  rows.push(['Seção','Item','Valor','Unidade']);
+
+  rows.push(['Vapor Alta','Caldeira C1', document.getElementById('c1Flow').value, 't/h']);
+  rows.push(['Vapor Alta','Caldeira C2', document.getElementById('c2Flow').value, 't/h']);
+  rows.push(['Vapor Alta','Consumo de Alta pelo TG1', document.getElementById('tg1In').value, 't/h']);
+  rows.push(['Vapor Alta','Rebaixamento Alta → Média', fmt(lastResults.letdownAM), 't/h']);
+  if (lastResults.deficitAlta > 0) rows.push(['Vapor Alta','Déficit de Alta', fmt(lastResults.deficitAlta), 't/h']);
+
+  rows.push(['Vapor Média','TG1 — saída Média', document.getElementById('tg1OutMedia').value, 't/h']);
+  rows.push(['Vapor Média','HEFA — Regime', document.getElementById('hefaRegimeMP').value, 't/h']);
+  rows.push(['Vapor Média','UGH — Regime', document.getElementById('ughRegimeMP').value, 't/h']);
+  rows.push(['Vapor Média','Rebaixamento Média → Baixa', fmt(lastResults.excessMB), 't/h']);
+  if (lastResults.deficitMedia > 0) rows.push(['Vapor Média','Déficit de Média', fmt(lastResults.deficitMedia), 't/h']);
+
+  rows.push(['Vapor Baixa','PTU', document.getElementById('ptuBaixa').value, 't/h']);
+  rows.push(['Vapor Baixa','Desaerador', document.getElementById('desaerador').value, 't/h']);
+  rows.push(['Vapor Baixa','HEFA — Regime', document.getElementById('hefaRegimeLP').value, 't/h']);
+  rows.push(['Vapor Baixa','BioFCC', document.getElementById('biofccLP').value, 't/h']);
+  rows.push(['Vapor Baixa','UGH — Consumo', document.getElementById('ughConsumoLP').value, 't/h']);
+  rows.push(['Vapor Baixa','Aquecimento Tanques OSBL (total)', document.getElementById('osblTotalDiagram').textContent, 't/h']);
+  rows.push(['Vapor Baixa','Saldo final de Vapor Baixa', fmt(lastResults.saldoBaixa), 't/h']);
+  if (lastResults.deficitBaixa > 0) rows.push(['Vapor Baixa','Déficit de Baixa', fmt(lastResults.deficitBaixa), 't/h']);
+
+  rows.push(['Condensador','Vapor pro condensador', fmt(lastResults.condFlow), 't/h']);
+  rows.push(['Condensador','Duty', document.getElementById('condDutyMcal').textContent, 'Mcal/h']);
+  rows.push(['Condensador','Água de resfriamento estimada', document.getElementById('condCW').textContent, 't/h']);
+
+  const csvContent = rows.map(r => r.map(csvEscape).join(';')).join('\n');
+  const blob = new Blob(['﻿' + csvContent], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'balanco_vapor_fluxo_resultados_' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showStatus('✔ CSV exportado');
+});
+</script>
+
+<div style="text-align:center; color:var(--muted); font-size:11px; margin-top:24px; padding-bottom:10px; letter-spacing:.08em;">
+  by ALR
+</div>
+
+</body>
+</html>

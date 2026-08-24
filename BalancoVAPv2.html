@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Simulador de Balanço de Vapor — TG1</title>
+<style>
+  :root{
+    --bg:#10161c;
+    --panel:#161e26;
+    --panel2:#1c252e;
+    --line:#2a3542;
+    --text:#e8edf2;
+    --muted:#8695a4;
+    --alta:#e2725b;      /* vapor alta - terracota/vermelho quente */
+    --alta-bg:#2a1a16;
+    --media:#e0a934;     /* vapor média - âmbar */
+    --media-bg:#2a2114;
+    --baixa:#3fa7c9;     /* vapor baixa - azul vapor */
+    --baixa-bg:#122730;
+    --consumo:#4caf72;   /* verde = consumo, igual convenção da planilha */
+    --consumo-bg:#152a1e;
+    --producao:#e0a934;  /* laranja = produção */
+    --producao-bg:#2a2114;
+    --danger:#e2545a;
+    --ok:#4caf72;
+    --mono: 'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+    --sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--sans); padding:24px; line-height:1.4;
+  }
+  h1{font-size:20px; margin:0 0 2px 0; letter-spacing:.3px;}
+  .subtitle{color:var(--muted); font-size:13px; margin-bottom:20px;}
+  .layout{ display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; align-items:start;}
+  @media(max-width:1000px){ .layout{grid-template-columns:1fr;} }
+
+  .col{ background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .col-head{ padding:12px 14px; font-weight:600; font-size:14px; display:flex; justify-content:space-between; align-items:center;}
+  .col-head .tag{font-family:var(--mono); font-size:11px; color:var(--muted); font-weight:400;}
+  .alta .col-head{background:var(--alta-bg); border-bottom:2px solid var(--alta); color:var(--alta);}
+  .media .col-head{background:var(--media-bg); border-bottom:2px solid var(--media); color:var(--media);}
+  .baixa .col-head{background:var(--baixa-bg); border-bottom:2px solid var(--baixa); color:var(--baixa);}
+
+  .section-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); padding:10px 14px 4px;}
+  .row{ display:flex; align-items:center; justify-content:space-between; padding:6px 14px; gap:8px; border-left:3px solid transparent;}
+  .row.consumo{ border-left-color:var(--consumo); }
+  .row.producao{ border-left-color:var(--producao); }
+  .row .label{ font-size:12.5px; flex:1; min-width:0; }
+  .row .label small{ display:block; color:var(--muted); font-size:10.5px; }
+  .row input[type=number]{
+    width:78px; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:5px 6px; font-family:var(--mono); font-size:12.5px; text-align:right;
+  }
+  .row input[type=number]:focus{outline:none; border-color:var(--baixa);}
+  .row .unit{ font-size:10.5px; color:var(--muted); width:26px;}
+  .row.readonly input{ color:var(--muted); background:#131a20; }
+  .checkbox-row{display:flex; align-items:center; gap:6px; padding:2px 14px 8px; font-size:11px; color:var(--muted);}
+  .checkbox-row input{accent-color:var(--baixa);}
+
+  .subtotal{ display:flex; justify-content:space-between; padding:8px 14px; font-size:12px; font-family:var(--mono); background:var(--panel2); }
+  .subtotal.prod{color:var(--producao);}
+  .subtotal.cons{color:var(--consumo);}
+
+  .tg1-block{ margin:10px 14px 14px; padding:10px 12px; border:1px dashed var(--line); border-radius:8px; background:#141b22;}
+  .tg1-block .tt{font-size:11.5px; font-weight:600; color:var(--text); margin-bottom:6px;}
+  .tg1-ratio{display:flex; gap:6px; align-items:center; font-size:11px; color:var(--muted); margin-bottom:8px; flex-wrap:wrap;}
+  .tg1-ratio input{width:46px; background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:5px; padding:3px 4px; font-family:var(--mono); font-size:11px; text-align:center;}
+
+  .balance-bar{ margin:12px 14px 16px; padding:10px 12px; border-radius:8px; font-family:var(--mono); font-size:13px; display:flex; justify-content:space-between; align-items:center;}
+  .balance-bar.ok{background:#132a1c; color:var(--ok); border:1px solid #21422c;}
+  .balance-bar.bad{background:#2a1518; color:var(--danger); border:1px solid #47252a;}
+  .balance-bar .n{font-size:15px; font-weight:700;}
+
+  .summary{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px;}
+  @media(max-width:1000px){ .summary{grid-template-columns:repeat(2,1fr);} }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .card .k{font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:6px;}
+  .card .v{font-family:var(--mono); font-size:22px; font-weight:700;}
+  .card .v small{font-size:12px; color:var(--muted); font-weight:400;}
+  .card.hot{ border-color:#47252a; background:linear-gradient(180deg,#211014,#191115);}
+  .card.hot .v{color:var(--danger);}
+  .card.cool .v{color:var(--ok);}
+
+  .condenser-panel{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; margin-top:16px; }
+  .condenser-panel h2{margin:0 0 4px; font-size:15px; color:var(--baixa);}
+  .cond-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-top:12px;}
+  @media(max-width:900px){.cond-grid{grid-template-columns:repeat(2,1fr);}}
+  .field{display:flex; flex-direction:column; gap:4px;}
+  .field label{font-size:11px; color:var(--muted);}
+  .field input{background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:6px; padding:6px 8px; font-family:var(--mono); font-size:12.5px;}
+  .gauge-wrap{margin-top:14px;}
+  .gauge{ height:14px; border-radius:7px; background:#0e1418; overflow:hidden; position:relative; border:1px solid var(--line);}
+  .gauge-fill{height:100%; border-radius:7px; transition:width .2s ease;}
+  .gauge-marks{display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-top:4px; font-family:var(--mono);}
+
+  .footer-actions{ display:flex; gap:10px; margin-top:18px; }
+  button.reset{ background:var(--panel2); color:var(--text); border:1px solid var(--line); padding:8px 14px; border-radius:7px; font-size:12.5px; cursor:pointer;}
+  button.reset:hover{border-color:var(--baixa);}
+
+  .note{font-size:10.5px; color:var(--muted); margin-top:2px; padding:0 14px 10px;}
+  .osbl-toggle{cursor:pointer; user-select:none; display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); padding:4px 14px;}
+  .osbl-list{display:none;}
+  .osbl-list.open{display:block;}
+  .row.osbl-toggle-row{cursor:pointer; user-select:none;}
+  .row.osbl-toggle-row .label{display:flex; align-items:center; gap:6px;}
+  .row.osbl-toggle-row .label .arrow{font-size:10px; color:var(--muted); transition:transform .15s ease;}
+  .osbl-total-box{
+    width:78px; background:var(--panel2); border:1px solid var(--line); color:var(--muted);
+    border-radius:6px; padding:5px 6px; font-family:var(--mono); font-size:12.5px; text-align:right;
+  }
+  #tblEntradas td, #tblSaidas td{ padding:4px 6px; border-bottom:1px solid var(--line); }
+  #tblEntradas td:last-child, #tblSaidas td:last-child{ text-align:right; }
+  #tblEntradas tr:last-child td, #tblSaidas tr:last-child td{ border-bottom:none; font-weight:700; }
+
+  .startup-panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    margin-top:16px;
+    padding:0 12px 12px;
+  }
+  .startup-head{
+    background:linear-gradient(90deg,#24172f,#1b1d2a);
+    color:#d76dff;
+    margin:0 -12px 10px;
+    padding:10px 12px;
+    font-weight:600;
+    font-size:13px;
+    border-radius:10px 10px 0 0;
+  }
+  .startup-enable{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    font-size:11px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .startup-help{
+    font-size:10.5px;
+    color:var(--muted);
+    margin-bottom:10px;
+  }
+  .startup-list{
+    border-left:2px solid #7b5aa6;
+    padding-left:10px;
+  }
+  .startup-item{
+    display:grid;
+    grid-template-columns:minmax(260px,1fr) 90px 80px 30px 20px;
+    gap:8px;
+    align-items:center;
+    margin-bottom:7px;
+  }
+  .startup-item input,
+  .startup-item select{
+    background:var(--panel2);
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:6px;
+    padding:6px 8px;
+    font-size:11.5px;
+    min-width:0;
+  }
+  .startup-item .startup-unit{
+    color:var(--muted);
+    font-size:10px;
+  }
+  .startup-delete{
+    background:transparent;
+    border:none;
+    color:#9f4a52;
+    cursor:pointer;
+    font-size:16px;
+    line-height:1;
+  }
+  .startup-add{
+    background:transparent;
+    color:#c98cff;
+    border:1px dashed #9f6ad1;
+    border-radius:6px;
+    padding:6px 10px;
+    cursor:pointer;
+    font-size:11px;
+    margin:4px 0 10px 10px;
+  }
+  .startup-total{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    background:var(--panel2);
+    padding:9px 10px;
+    font-family:var(--mono);
+    font-size:11px;
+    color:#d76dff;
+  }
+  @media(max-width:850px){
+    .startup-item{
+      grid-template-columns:1fr 84px 74px 24px;
+    }
+    .startup-item .startup-unit{display:none;}
+  }
+
+
+  .extra-consumption-list{
+    padding:0 14px 4px;
+  }
+  .extra-consumption-item{
+    display:grid;
+    grid-template-columns:minmax(180px,1fr) 84px 30px 20px;
+    gap:8px;
+    align-items:center;
+    margin:6px 0;
+    padding-left:8px;
+    border-left:3px solid var(--consumo);
+  }
+  .extra-consumption-item input{
+    background:var(--panel2);
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:6px;
+    padding:6px 8px;
+    font-size:11.5px;
+    min-width:0;
+  }
+  .extra-consumption-item .extra-unit{
+    color:var(--muted);
+    font-size:10px;
+  }
+  .extra-delete{
+    background:transparent;
+    border:none;
+    color:#9f4a52;
+    cursor:pointer;
+    font-size:16px;
+    line-height:1;
+  }
+  .extra-add{
+    margin:4px 14px 10px;
+    background:transparent;
+    color:var(--consumo);
+    border:1px dashed var(--consumo);
+    border-radius:6px;
+    padding:6px 10px;
+    cursor:pointer;
+    font-size:11px;
+  }
+
+  .toolbar{
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+    margin-bottom:16px;
+  }
+  .toolbar button{
+    font-family:var(--sans);
+    font-size:12.5px;
+    padding:8px 14px;
+    border-radius:7px;
+    cursor:pointer;
+    border:1px solid var(--line);
+    background:var(--panel2);
+    color:var(--text);
+    display:flex; align-items:center; gap:6px;
+    transition:filter .15s ease;
+  }
+  .toolbar button:hover{ filter:brightness(1.3); }
+  .toolbar button.primary{ background:var(--media); border-color:var(--media); color:#1a1200; font-weight:600; }
+  .toolbar button.secondary{ background:var(--baixa); border-color:var(--baixa); color:#04202b; font-weight:600; }
+  .toolbar .save-status{ font-size:11px; color:var(--muted); }
+
+  .autosave-note{ font-size:10.5px; color:var(--muted); margin:-10px 0 16px; }
+
+  .scenario-bar{
+    display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+    margin:0 0 16px; padding:10px 12px;
+    background:var(--panel); border:1px solid var(--line); border-radius:8px;
+  }
+  .scenario-bar .scenario-label{ font-size:11px; color:var(--muted); margin-right:2px;}
+  .scenario-bar input[type=text]{
+    background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:7px 10px; font-size:12.5px; font-family:var(--sans);
+    min-width:170px;
+  }
+  .scenario-bar select{
+    background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:7px 10px; font-size:12.5px; font-family:var(--sans);
+    min-width:180px;
+  }
+  .scenario-bar button{
+    font-family:var(--sans); font-size:12px; padding:7px 12px; border-radius:6px;
+    cursor:pointer; border:1px solid var(--line); background:var(--panel2); color:var(--text);
+    display:flex; align-items:center; gap:5px; transition:filter .15s ease;
+  }
+  .scenario-bar button:hover{ filter:brightness(1.3); }
+
+</style>
+</head>
+<body>
+
+<h1>Simulador de Balanço de Vapor — Alta / Média / Baixa + TG1</h1>
+
+<div class="toolbar">
+  <button class="primary" id="saveBtn">💾 Salvar dados</button>
+  <button id="loadBtn">📂 Carregar dados salvos</button>
+  <button class="secondary" id="exportBtn">📤 Exportar resultados (CSV)</button>
+  <span class="save-status" id="saveStatus"></span>
+</div>
+<div class="autosave-note">🔄 Suas alterações são salvas automaticamente neste navegador — ao reabrir esta página aqui, os últimos valores voltam sozinhos. Use os "Cenários" abaixo para guardar e comparar várias versões nomeadas (ex.: "Partida", "Regime normal").</div>
+
+<div class="scenario-bar">
+  <span class="scenario-label">Cenários salvos:</span>
+  <input type="text" id="scenarioName" placeholder="Nome do cenário (ex.: Regime normal)">
+  <button id="saveScenarioBtn">💾 Salvar cenário</button>
+  <select id="scenarioSelect"><option value="">— selecionar —</option></select>
+  <button id="loadScenarioBtn">📂 Carregar</button>
+  <button id="deleteScenarioBtn">🗑️ Excluir</button>
+  <button id="exportScenarioBtn">⬇️ Exportar .json</button>
+  <button id="importScenarioBtn">⬆️ Importar .json</button>
+  <input type="file" id="importScenarioFile" accept="application/json" style="display:none;">
+</div>
+
+<div class="summary">
+  <div class="card" id="cardAlta"><div class="k">Alta disponível para rebaixamento</div><div class="v" id="vAltaSaldo">–</div></div>
+  <div class="card" id="cardMedia"><div class="k">Média disponível para rebaixamento</div><div class="v" id="vMediaSaldo">–</div></div>
+  <div class="card" id="cardBaixa"><div class="k">Saldo final de Vapor Baixa</div><div class="v" id="vBaixaSaldo">–</div></div>
+  <div class="card hot" id="cardCond"><div class="k">Vapor pro Condensador (minimizar)</div><div class="v" id="vCond">–</div></div>
+</div>
+
+<div class="layout">
+
+  <!-- ===================== ALTA ===================== -->
+  <div class="col alta">
+    <div class="col-head">Vapor Alta <span class="tag">60 kgf/cm²g</span></div>
+
+    <div class="section-label">Produção</div>
+    <div class="tg1-block" style="margin:6px 14px 10px;">
+      <div class="tt">Caldeiras — capacidade e turndown</div>
+      <div class="tg1-ratio">
+        <input type="number" id="capUnit" value="35" step="0.5">t/h/caldeira ×
+        <input type="number" id="numCaldeiras" value="2" step="1" min="0">caldeiras =
+        <span id="capTotal" style="font-family:var(--mono); color:var(--text);">70,00</span> t/h capacidade
+      </div>
+      <div class="tg1-ratio">
+        Turndown atual: <input type="number" id="turndownPct" value="0" step="0.1" min="0" max="100">%
+      </div>
+    </div>
+    <div class="row producao">
+      <div class="label">Caldeiras — produção de Vapor de Alta</div>
+      <input type="number" id="caldeira" value="0" step="0.001">
+      <div class="unit">t/h</div>
+    </div>
+
+    <div class="section-label">Consumo</div>
+
+    <div class="tg1-block">
+      <div class="tt">TG1 — único consumidor contínuo de Vapor de Alta</div>
+      <div class="tg1-ratio">
+        referência: <input type="number" id="refAlta" value="0" step="0.1">t Alta →
+        <input type="number" id="refMedia" value="0" step="0.1">t Média +
+        <input type="number" id="refBaixa" value="0" step="0.1">t Baixa
+      </div>
+      <div class="row consumo" style="padding:4px 0;">
+        <div class="label">Consumo de Vapor de Alta pelo TG1</div>
+        <input type="number" id="tg1In" value="0" step="0.1">
+        <div class="unit">t/h</div>
+      </div>
+    </div>
+
+    <div class="extra-consumption-list" id="extraAltaList"></div>
+    <button class="extra-add" id="addExtraAlta">+ Adicionar consumo de Alta</button>
+
+    <div class="balance-bar" id="barAlta">
+      <span>Excedente de Alta convertido em produção de Média</span><span class="n" id="barAltaVal">–</span>
+    </div>
+  </div>
+
+  <!-- ===================== MÉDIA ===================== -->
+  <div class="col media">
+    <div class="col-head">Vapor Média <span class="tag">15 kgf/cm²g / 250°C</span></div>
+
+    <div class="section-label">Produção</div>
+    <div class="row producao readonly" style="border-left-color:var(--alta); background:rgba(226,114,91,.05);">
+      <div class="label">Rebaixamento Alta→Média<small>todo excedente disponível de Vapor de Alta</small></div>
+      <input type="text" id="letdownAM" value="0,00" disabled>
+      <div class="unit">t/h</div>
+    </div>
+    <div class="row producao readonly">
+      <div class="label">TG1 — saída Média (calculado)</div>
+      <input type="text" id="tg1OutMedia" value="0,00" disabled>
+      <div class="unit">t/h</div>
+    </div>
+    <div class="row producao">
+      <div class="label">HEFA — Regime</div>
+      <input type="number" id="hefaRegimeMP" value="0" step="0.001">
+      <div class="unit">t/h</div>
+    </div>
+    <div class="row producao">
+      <div class="label">UGH — Regime</div>
+      <input type="number" id="ughRegimeMP" value="0" step="0.001">
+      <div class="unit">t/h</div>
+    </div>
+
+    <div class="section-label">Consumo</div>
+    <div class="row consumo">
+      <div class="label">Turbo Bomba H-TP9B</div>
+      <input type="number" id="tb1" value="0" step="0.1">
+      <div class="unit">t/h</div>
+    </div>
+    <div class="row consumo">
+      <div class="label">Turbo Bombas de Água</div>
+      <input type="number" id="tb2" value="0" step="0.1">
+      <div class="unit">t/h</div>
+    </div>
+    <div class="row consumo">
+      <div class="label">PTU — 9 barg</div>
+      <input type="number" id="ptu9" value="0" step="0.001">
+      <div class="unit">t/h</div>
+    </div>
+    <div class="row consumo">
+      <div class="label">BioFCC</div>
+      <input type="number" id="biofccMP" value="0" step="0.1">
+      <div class="unit">t/h</div>
+    </div>
+
+    <div class="extra-consumption-list" id="extraMediaList"></div>
+    <button class="extra-add" id="addExtraMedia">+ Adicionar consumo de Média</button>
+
+    <div class="balance-bar" id="barMedia">
+      <span>Excedente de Média convertido em produção de Baixa</span><span class="n" id="barMediaVal">–</span>
+    </div>
+  </div>
+
+  <!-- ===================== BAIXA ===================== -->
+  <div class="col baixa">
+    <div class="col-head">Vapor Baixa <span class="tag">3,5 kgf/cm²g / 150°C</span></div>
+
+    <div class="section-label">Produção</div>
+    <div class="row producao readonly" style="border-left-color:var(--media); background:rgba(224,169,52,.05);">
+      <div class="label">Rebaixamento Média→Baixa<small>todo excedente disponível de Vapor de Média</small></div>
+      <input type="text" id="excessMB" value="0,00" disabled>
+      <div class="unit">t/h</div>
+    </div>
+    <div class="row producao readonly">
+      <div class="label">TG1 — saída Baixa (calculado)</div>
+      <input type="text" id="tg1OutBaixa" value="0,00" disabled>
+      <div class="unit">t/h</div>
+    </div>
+    <div class="row producao readonly">
+      <div class="label">Turbo Bomba H-TP9B — saída</div>
+      <input type="text" id="tb1out" value="17,00" disabled>
+      <div class="unit">t/h</div>
+    </div>
+    <div class="row producao readonly">
+      <div class="label">Turbo Bombas de Água — saída</div>
+      <input type="text" id="tb2out" value="20,40" disabled>
+      <div class="unit">t/h</div>
+    </div>
+
+    <div class="section-label">Consumo</div>
+    <div class="row consumo">
+      <div class="label">PTU</div>
+      <input type="number" id="ptuBaixa" value="0" step="0.001">
+      <div class="unit">t/h</div>
+    </div>
+    <div class="row consumo">
+      <div class="label">Desaerador</div>
+      <input type="number" id="desaerador" value="0" step="0.001">
+      <div class="unit">t/h</div>
+    </div>
+    <div class="row consumo">
+      <div class="label">HEFA — Regime</div>
+      <input type="number" id="hefaRegimeLP" value="0" step="0.001">
+      <div class="unit">t/h</div>
+    </div>
+    <div class="row consumo">
+      <div class="label">BioFCC</div>
+      <input type="number" id="biofccLP" value="0" step="0.1">
+      <div class="unit">t/h</div>
+    </div>
+
+    <div class="row consumo osbl-toggle-row" id="osblToggle">
+      <div class="label"><span class="arrow" id="osblArrow">▸</span> Aquecimento Tanques OSBL<small>7 itens</small></div>
+      <div class="osbl-total-box"><span id="osblTotal">0,0000</span></div>
+      <div class="unit">t/h</div>
+    </div>
+    <div class="osbl-list" id="osblList">
+      <div class="row consumo"><div class="label">TQ-150</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
+      <div class="row consumo"><div class="label">TQ-151</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
+      <div class="row consumo"><div class="label">TQ-074</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
+      <div class="row consumo"><div class="label">TQ-075</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
+      <div class="row consumo"><div class="label">TQ-161</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
+      <div class="row consumo"><div class="label">TQ-158</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
+      <div class="row consumo"><div class="label">TQ-159</div><input type="number" class="osbl" value="0" step="0.0001"><div class="unit">t/h</div></div>
+    </div>
+
+    <div class="extra-consumption-list" id="extraBaixaList"></div>
+    <button class="extra-add" id="addExtraBaixa">+ Adicionar consumo de Baixa</button>
+
+    <div class="balance-bar" id="barBaixa">
+      <span>Saldo Baixa (&gt;0 vai pro condensador)</span><span class="n" id="barBaixaVal">–</span>
+    </div>
+  </div>
+</div>
+
+
+<div class="startup-panel">
+  <div class="startup-head">Consumos de Partida (Startup)</div>
+  <label class="startup-enable">
+    <input type="checkbox" id="isStartup">
+    é cenário de partida?
+  </label>
+
+  <div class="startup-list" id="startupList"></div>
+
+  <button class="startup-add" id="addStartupItem">+ Adicionar item de partida</button>
+
+  <div class="startup-total">
+    <span>Total de partida</span>
+    <span id="startupTotal">0,00 t/h</span>
+  </div>
+</div>
+
+<div class="condenser-panel">
+  <h2>Condensador Auxiliar</h2>
+  <div class="note" style="padding:0; font-family:var(--mono); font-size:11.5px; line-height:1.7;">
+    Duty (MJ/h) = Vazão excedente (t/h) × [h_LP − h_cond] (kJ/kg)<br>
+    Duty (Mcal/h) = Duty (MJ/h) × 0,238846<br>
+    Água de resfriamento (t/h) = Duty (Mcal/h) ÷ ΔT_CWS (°C)  <span style="color:var(--muted); font-family:var(--sans);">— considerando Cp da água ≈ 1 Mcal/(t·°C)</span>
+  </div>
+  <div class="cond-grid">
+    <div class="field"><label>Entalpia vapor Baixa (h_LP)</label><input type="number" id="hLP" value="2748" step="1"> <span style="font-size:10px;color:var(--muted)">kJ/kg</span></div>
+    <div class="field"><label>Entalpia condensado saída</label><input type="number" id="hCond" value="460.92" step="0.01"> <span style="font-size:10px;color:var(--muted)">kJ/kg</span></div>
+    <div class="field"><label>Capacidade design do condensador</label><input type="number" id="condDesign" value="60" step="1"> <span style="font-size:10px;color:var(--muted)">t/h</span></div>
+    <div class="field"><label>ΔT água de resfriamento (CWS)</label><input type="number" id="dtCW" value="15" step="0.5"> <span style="font-size:10px;color:var(--muted)">°C</span></div>
+  </div>
+  <div class="cond-grid" style="margin-top:18px;">
+    <div class="card" style="grid-column:span 1;"><div class="k">Vazão ao condensador</div><div class="v" id="condFlow">–</div></div>
+    <div class="card"><div class="k">Duty</div><div class="v" id="condDutyMJ">– <small>MJ/h</small></div></div>
+    <div class="card"><div class="k">Duty</div><div class="v" id="condDutyMcal">– <small>Mcal/h</small></div></div>
+    <div class="card"><div class="k">Água de resfriamento estimada</div><div class="v" id="condCW">– <small>t/h</small></div></div>
+  </div>
+  <div class="gauge-wrap">
+    <div class="gauge"><div class="gauge-fill" id="gaugeFill" style="width:0%; background:var(--ok);"></div></div>
+    <div class="gauge-marks"><span>0%</span><span id="gaugePct">0% da capacidade design</span><span>100%+</span></div>
+  </div>
+</div>
+
+<div class="condenser-panel" id="balancoGeralPanel">
+  <h2 style="color:var(--text);">Balanço Geral do Sistema</h2>
+  <div class="cond-grid" style="grid-template-columns:1fr 1fr; margin-top:14px;">
+    <div>
+      <div class="section-label" style="padding-left:0;">Entradas (fontes)</div>
+      <table style="width:100%; font-size:12.5px; font-family:var(--mono); border-collapse:collapse;" id="tblEntradas"></table>
+    </div>
+    <div>
+      <div class="section-label" style="padding-left:0;">Saídas (consumidores + condensador)</div>
+      <table style="width:100%; font-size:12.5px; font-family:var(--mono); border-collapse:collapse;" id="tblSaidas"></table>
+    </div>
+  </div>
+  <div class="cond-grid" style="margin-top:16px;">
+    <div class="card"><div class="k">Total Entradas</div><div class="v" id="totEntradas">–</div></div>
+    <div class="card"><div class="k">Total Saídas</div><div class="v" id="totSaidas">–</div></div>
+    <div class="card" id="cardFecha"><div class="k">Diferença (deve ≈ 0)</div><div class="v" id="totDiff">–</div></div>
+  </div>
+</div>
+
+<div class="footer-actions">
+  <button class="reset" id="resetBtn">↺ Restaurar valores do diagrama original</button>
+</div>
+
+<script>
+function num(id){ const el = document.getElementById(id); return parseFloat(el.value) || 0; }
+function set(id, val){ document.getElementById(id).textContent = val; }
+function fmt(v){ return (Math.round(v*1000)/1000).toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:3}); }
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, ch => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[ch]));
+}
+
+const startupCheckbox = document.getElementById('isStartup');
+let boilerSource = 'turndown';
+let autosaveTimer = null;
+let lastResults = {};
+
+let startupItems = [
+  {name:'UGH — Partida', pressure:'alta', flow:0},
+  {name:'HEFA — Partida', pressure:'baixa', flow:0},
+  {name:'BioFCC — Partida', pressure:'baixa', flow:0}
+];
+
+let extraConsumptions = {
+  alta: [],
+  media: [],
+  baixa: []
+};
+
+function renderExtraConsumptions(level){
+  const map = {
+    alta: {list:'extraAltaList', label:'Alta'},
+    media: {list:'extraMediaList', label:'Média'},
+    baixa: {list:'extraBaixaList', label:'Baixa'}
+  };
+
+  const cfg = map[level];
+  const list = document.getElementById(cfg.list);
+
+  list.innerHTML = extraConsumptions[level].map((item,index)=>`
+    <div class="extra-consumption-item" data-index="${index}">
+      <input type="text" class="extra-name" value="${escapeHtml(item.name)}">
+      <input type="number" class="extra-flow" value="${item.flow}" min="0" step="0.1">
+      <span class="extra-unit">t/h</span>
+      <button class="extra-delete" title="Excluir consumo">×</button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.extra-consumption-item').forEach(row=>{
+    const index = Number(row.dataset.index);
+
+    row.querySelector('.extra-name').addEventListener('input', e=>{
+      extraConsumptions[level][index].name = e.target.value;
+      calc();
+    });
+
+    row.querySelector('.extra-flow').addEventListener('input', e=>{
+      extraConsumptions[level][index].flow = parseFloat(e.target.value) || 0;
+      calc();
+    });
+
+    row.querySelector('.extra-delete').addEventListener('click', ()=>{
+      extraConsumptions[level].splice(index,1);
+      renderExtraConsumptions(level);
+      calc();
+    });
+  });
+}
+
+function renderAllExtraConsumptions(){
+  renderExtraConsumptions('alta');
+  renderExtraConsumptions('media');
+  renderExtraConsumptions('baixa');
+}
+
+function getExtraConsumptionTotal(level){
+  return extraConsumptions[level].reduce((sum,item)=>sum+(Number(item.flow)||0),0);
+}
+
+function renderStartupItems(){
+  const list = document.getElementById('startupList');
+  list.innerHTML = startupItems.map((item,index)=>`
+    <div class="startup-item" data-index="${index}">
+      <input type="text" class="startup-name" value="${escapeHtml(item.name)}">
+      <select class="startup-pressure">
+        <option value="alta" ${item.pressure==='alta'?'selected':''}>Alta</option>
+        <option value="media" ${item.pressure==='media'?'selected':''}>Média</option>
+        <option value="baixa" ${item.pressure==='baixa'?'selected':''}>Baixa</option>
+      </select>
+      <input type="number" class="startup-flow" value="${item.flow}" min="0" step="0.1">
+      <span class="startup-unit">t/h</span>
+      <button class="startup-delete" title="Excluir item">×</button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.startup-item').forEach(row=>{
+    const index = Number(row.dataset.index);
+
+    row.querySelector('.startup-name').addEventListener('input', e=>{
+      startupItems[index].name = e.target.value;
+      calc();
+    });
+
+    row.querySelector('.startup-pressure').addEventListener('change', e=>{
+      startupItems[index].pressure = e.target.value;
+      calc();
+    });
+
+    row.querySelector('.startup-flow').addEventListener('input', e=>{
+      startupItems[index].flow = parseFloat(e.target.value) || 0;
+      calc();
+    });
+
+    row.querySelector('.startup-delete').addEventListener('click', ()=>{
+      startupItems.splice(index,1);
+      renderStartupItems();
+      calc();
+    });
+  });
+
+  const disabled = !startupCheckbox.checked;
+  list.querySelectorAll('input,select,button').forEach(el=> el.disabled = disabled);
+}
+
+function getStartupByPressure(){
+  const totals = {alta:0, media:0, baixa:0};
+  if (!startupCheckbox.checked){
+    set('startupTotal','0,00 t/h');
+    return totals;
+  }
+
+  let total = 0;
+  startupItems.forEach(item=>{
+    const flow = Number(item.flow) || 0;
+    totals[item.pressure] += flow;
+    total += flow;
+  });
+
+  set('startupTotal', fmt(total) + ' t/h');
+  return totals;
+}
+
+
+
+function calc(){
+  // --- Partida configurável por nível de pressão ---
+  const isStartup = startupCheckbox.checked;
+  const startup = getStartupByPressure();
+  const startupAlta = startup.alta;
+  const startupMedia = startup.media;
+  const startupBaixa = startup.baixa;
+
+  // --- TG1: consome Alta e descarrega em Média + Baixa ---
+  const refAlta = num('refAlta') || 1;
+  const refMedia = num('refMedia');
+  const refBaixa = num('refBaixa');
+  const tg1In = num('tg1In');
+  const tg1OutMedia = tg1In * (refMedia/refAlta);
+  const tg1OutBaixa = tg1In * (refBaixa/refAlta);
+
+  document.getElementById('tg1OutMedia').value = fmt(tg1OutMedia);
+  document.getElementById('tg1OutBaixa').value = fmt(tg1OutBaixa);
+
+  // --- Turbobombas: consumo em Média e descarga em Baixa ---
+  const tb1 = num('tb1');
+  const tb2 = num('tb2');
+  document.getElementById('tb1out').value = fmt(tb1);
+  document.getElementById('tb2out').value = fmt(tb2);
+
+  // --- ALTA: produção das caldeiras e consumo contínuo exclusivo do TG1 ---
+  const capUnit = num('capUnit');
+  const numCaldeiras = num('numCaldeiras');
+  const capTotal = capUnit * numCaldeiras;
+  set('capTotal', fmt(capTotal));
+
+  let producaoAlta;
+  if (boilerSource === 'production'){
+    producaoAlta = num('caldeira');
+    const turndownCalc = capTotal > 0 ? (producaoAlta/capTotal*100) : 0;
+    document.getElementById('turndownPct').value = Math.round(turndownCalc*100)/100;
+  } else {
+    const turndownPct = num('turndownPct');
+    producaoAlta = capTotal * (turndownPct/100);
+    document.getElementById('caldeira').value = Math.round(producaoAlta*1000)/1000;
+  }
+
+  const consumoAlta = tg1In + startupAlta + getExtraConsumptionTotal('alta');
+  const saldoAltaBruto = producaoAlta - consumoAlta;
+
+  // Toda sobra de Alta vira produção de Média.
+  const letdownAM = Math.max(0, saldoAltaBruto);
+  const deficitAlta = Math.max(0, -saldoAltaBruto);
+  document.getElementById('letdownAM').value = fmt(letdownAM);
+
+  // --- MÉDIA: TG1 + produções próprias + letdown de Alta ---
+  const producaoMedia =
+    tg1OutMedia +
+    num('hefaRegimeMP') +
+    num('ughRegimeMP') +
+    letdownAM;
+
+  const consumoMedia =
+    num('ptu9') +
+    num('biofccMP') +
+    tb1 +
+    tb2 +
+    startupMedia +
+    getExtraConsumptionTotal('media');
+
+  const saldoMediaBruto = producaoMedia - consumoMedia;
+
+  // Toda sobra de Média vira produção de Baixa.
+  const excessMB = Math.max(0, saldoMediaBruto);
+  const deficitMedia = Math.max(0, -saldoMediaBruto);
+  document.getElementById('excessMB').value = fmt(excessMB);
+
+  // --- OSBL ---
+  let osblSum = 0;
+  document.querySelectorAll('.osbl').forEach(inp=>{
+    osblSum += parseFloat(inp.value) || 0;
+  });
+  set('osblTotal', fmt(osblSum));
+
+  // --- BAIXA: TG1 + turbobombas + partida + letdown de Média ---
+  const producaoBaixa =
+    tg1OutBaixa +
+    tb1 +
+    tb2 +
+    excessMB;
+
+  const consumoBaixa =
+    startupBaixa +
+    getExtraConsumptionTotal('baixa') +
+    num('ptuBaixa') +
+    num('desaerador') +
+    num('hefaRegimeLP') +
+    num('biofccLP') +
+    osblSum;
+
+  const saldoBaixa = producaoBaixa - consumoBaixa;
+  const condFlow = Math.max(0, saldoBaixa);
+  const deficitBaixa = Math.max(0, -saldoBaixa);
+
+  // ---- Cards resumo ----
+  set('vAltaSaldo',
+      deficitAlta > 0
+      ? 'DÉFICIT ' + fmt(deficitAlta) + ' t/h'
+      : fmt(letdownAM) + ' t/h rebaixado');
+
+  set('vMediaSaldo',
+      deficitMedia > 0
+      ? 'DÉFICIT ' + fmt(deficitMedia) + ' t/h'
+      : fmt(excessMB) + ' t/h rebaixado');
+
+  set('vBaixaSaldo',
+      deficitBaixa > 0
+      ? 'DÉFICIT ' + fmt(deficitBaixa) + ' t/h'
+      : '+' + fmt(saldoBaixa) + ' t/h');
+
+  set('vCond', fmt(condFlow) + ' t/h');
+
+  document.getElementById('cardAlta').className = 'card' + (deficitAlta > 0 ? ' hot' : ' cool');
+  document.getElementById('cardMedia').className = 'card' + (deficitMedia > 0 ? ' hot' : ' cool');
+  document.getElementById('cardBaixa').className = 'card' + (deficitBaixa > 0 ? ' hot' : ' cool');
+
+  // ---- Barras ----
+  const barAlta = document.getElementById('barAlta');
+  barAlta.className = 'balance-bar ' + (deficitAlta > 0 ? 'bad' : 'ok');
+  set('barAltaVal',
+      deficitAlta > 0
+      ? 'DÉFICIT ' + fmt(deficitAlta) + ' t/h'
+      : fmt(letdownAM) + ' t/h → Média');
+
+  const barMedia = document.getElementById('barMedia');
+  barMedia.className = 'balance-bar ' + (deficitMedia > 0 ? 'bad' : 'ok');
+  set('barMediaVal',
+      deficitMedia > 0
+      ? 'DÉFICIT ' + fmt(deficitMedia) + ' t/h'
+      : fmt(excessMB) + ' t/h → Baixa');
+
+  const barBaixa = document.getElementById('barBaixa');
+  barBaixa.className = 'balance-bar ' + (deficitBaixa > 0 ? 'bad' : 'ok');
+  set('barBaixaVal',
+      deficitBaixa > 0
+      ? 'DÉFICIT ' + fmt(deficitBaixa) + ' t/h'
+      : fmt(condFlow) + ' t/h → Condensador');
+
+  // ---- Condensador ----
+  const hLP = num('hLP');
+  const hCond = num('hCond');
+  const design = num('condDesign') || 1;
+  const dtCW = num('dtCW') || 1;
+
+  const dutyMJ = condFlow * (hLP - hCond);
+  const dutyMcal = dutyMJ * 0.238846;
+  const cwFlow = dutyMcal > 0 ? dutyMcal / dtCW : 0;
+
+  set('condFlow', fmt(condFlow) + ' t/h');
+  set('condDutyMJ', fmt(dutyMJ));
+  set('condDutyMcal', fmt(dutyMcal));
+  set('condCW', fmt(cwFlow));
+
+  const pct = Math.min(140, (condFlow/design)*100);
+  const fill = document.getElementById('gaugeFill');
+  fill.style.width = Math.min(100,pct) + '%';
+  fill.style.background = pct > 100 ? 'var(--danger)' : (pct > 70 ? 'var(--media)' : 'var(--ok)');
+  set('gaugePct', Math.round(pct) + '% da capacidade design (' + fmt(design) + ' t/h)');
+
+  // ---- BALANÇO GERAL ----
+  const entradas = [
+    ['Caldeiras (Alta)', producaoAlta],
+    ['HEFA — produção em Média', num('hefaRegimeMP')],
+    ['UGH — produção em Média', num('ughRegimeMP')]
+  ];
+
+  const saidas = [
+    ['PTU — 9 barg (Média)', num('ptu9')],
+    ['BioFCC — consumo (Média)', num('biofccMP')],
+    ['PTU (Baixa)', num('ptuBaixa')],
+    ['Desaerador (Baixa)', num('desaerador')],
+    ['HEFA — Regime (Baixa)', num('hefaRegimeLP')],
+    ['BioFCC — consumo (Baixa)', num('biofccLP')],
+    ['Aquecimento Tanques OSBL (Baixa)', osblSum],
+    ['Condensador (excedente final)', condFlow]
+  ];
+
+  if (isStartup){
+    startupItems.forEach(item=>{
+      const pressureLabel =
+        item.pressure === 'alta' ? 'Alta' :
+        item.pressure === 'media' ? 'Média' : 'Baixa';
+      saidas.push([`${item.name || 'Item de partida'} (${pressureLabel})`, Number(item.flow) || 0]);
+    });
+  }
+
+  ['alta','media','baixa'].forEach(level=>{
+    const pressureLabel =
+      level === 'alta' ? 'Alta' :
+      level === 'media' ? 'Média' : 'Baixa';
+
+    extraConsumptions[level].forEach(item=>{
+      saidas.push([`${item.name || 'Consumo adicional'} (${pressureLabel})`, Number(item.flow) || 0]);
+    });
+  });
+
+  if (deficitAlta > 0) entradas.push(['⚠ Necessidade adicional de Alta', deficitAlta]);
+  if (deficitMedia > 0) entradas.push(['⚠ Necessidade adicional de Média', deficitMedia]);
+  if (deficitBaixa > 0) entradas.push(['⚠ Necessidade adicional de Baixa', deficitBaixa]);
+
+  function renderTable(elId, rows, total){
+    const el = document.getElementById(elId);
+    el.innerHTML =
+      rows.map(r=>`<tr><td>${escapeHtml(r[0])}</td><td>${fmt(r[1])} t/h</td></tr>`).join('') +
+      `<tr><td>Total</td><td>${fmt(total)} t/h</td></tr>`;
+  }
+
+  const totalEntradas = entradas.reduce((a,r)=>a+r[1],0);
+  const totalSaidas = saidas.reduce((a,r)=>a+r[1],0);
+
+  renderTable('tblEntradas', entradas, totalEntradas);
+  renderTable('tblSaidas', saidas, totalSaidas);
+
+  set('totEntradas', fmt(totalEntradas) + ' t/h');
+  set('totSaidas', fmt(totalSaidas) + ' t/h');
+
+  const diff = totalEntradas - totalSaidas;
+  set('totDiff', (diff >= 0 ? '+' : '') + fmt(diff) + ' t/h');
+  document.getElementById('cardFecha').className =
+    'card' + (Math.abs(diff) > 0.05 ? ' hot' : ' cool');
+
+  // Guarda os valores numéricos calculados (sem texto de status) para uso na exportação CSV
+  lastResults = {
+    producaoAlta, deficitAlta, letdownAM,
+    deficitMedia, excessMB,
+    saldoBaixa, deficitBaixa, condFlow,
+    dutyMcal, cwFlow
+  };
+
+  scheduleAutosave();
+}
+
+
+document.querySelectorAll('input[type=number]').forEach(inp=>{
+  if (inp.id === 'caldeira' || inp.id === 'turndownPct') return; // tratados abaixo com controle de origem
+  inp.addEventListener('input', calc);
+});
+document.getElementById('caldeira').addEventListener('input', ()=>{ boilerSource = 'production'; calc(); });
+document.getElementById('turndownPct').addEventListener('input', ()=>{ boilerSource = 'turndown'; calc(); });
+document.getElementById('isStartup').addEventListener('change', ()=>{
+  renderStartupItems();
+  calc();
+});
+
+document.getElementById('addStartupItem').addEventListener('click', ()=>{
+  startupItems.push({name:'Novo item de partida', pressure:'baixa', flow:0});
+  renderStartupItems();
+  calc();
+});
+
+document.getElementById('addExtraAlta').addEventListener('click', ()=>{
+  extraConsumptions.alta.push({name:'Novo consumo de Alta', flow:0});
+  renderExtraConsumptions('alta');
+  calc();
+});
+
+document.getElementById('addExtraMedia').addEventListener('click', ()=>{
+  extraConsumptions.media.push({name:'Novo consumo de Média', flow:0});
+  renderExtraConsumptions('media');
+  calc();
+});
+
+document.getElementById('addExtraBaixa').addEventListener('click', ()=>{
+  extraConsumptions.baixa.push({name:'Novo consumo de Baixa', flow:0});
+  renderExtraConsumptions('baixa');
+  calc();
+});
+document.getElementById('osblToggle').addEventListener('click', ()=>{
+  const list = document.getElementById('osblList');
+  const open = list.classList.toggle('open');
+  document.getElementById('osblArrow').textContent = open ? '▾' : '▸';
+});
+
+const defaults = {};
+document.querySelectorAll('input[type=number]:not(.osbl)').forEach(inp=>{ defaults[inp.id]=inp.value; });
+const osblDefaults = Array.from(document.querySelectorAll('.osbl')).map(i=>i.value);
+
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  Object.keys(defaults).forEach(id=>{ document.getElementById(id).value = defaults[id]; });
+  document.querySelectorAll('.osbl').forEach((inp,i)=>{ inp.value = osblDefaults[i]; });
+  document.getElementById('isStartup').checked = false;
+  startupItems = [
+    {name:'UGH — Partida', pressure:'alta', flow:0},
+    {name:'HEFA — Partida', pressure:'baixa', flow:0},
+    {name:'BioFCC — Partida', pressure:'baixa', flow:0}
+  ];
+  extraConsumptions = {alta:[], media:[], baixa:[]};
+  boilerSource = 'turndown';
+  renderStartupItems();
+  renderAllExtraConsumptions();
+  calc();
+});
+
+renderStartupItems();
+renderAllExtraConsumptions();
+calc();
+
+// ================= SALVAR / CARREGAR / EXPORTAR =================
+
+const STORAGE_KEY = 'balancoVaporCascata_v1';
+const SCENARIOS_KEY = 'balancoVaporCenarios_v1';
+
+function scheduleAutosave(){
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(()=>{
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(collectState()));
+    }catch(e){
+      // armazenamento indisponível (modo privado, quota etc.) — ignora silenciosamente
+    }
+  }, 600);
+}
+
+function collectState(){
+  const inputs = {};
+  document.querySelectorAll('input[type=number]:not(.osbl)').forEach(inp=>{ inputs[inp.id] = inp.value; });
+  const osblValues = Array.from(document.querySelectorAll('.osbl')).map(i=>i.value);
+  return {
+    savedAt: new Date().toISOString(),
+    inputs,
+    osblValues,
+    isStartup: document.getElementById('isStartup').checked,
+    startupItems,
+    extraConsumptions,
+    boilerSource
+  };
+}
+
+function applyState(state){
+  if (!state) return;
+  Object.keys(state.inputs || {}).forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.value = state.inputs[id];
+  });
+  document.querySelectorAll('.osbl').forEach((inp,i)=>{
+    if (state.osblValues && state.osblValues[i] !== undefined) inp.value = state.osblValues[i];
+  });
+  document.getElementById('isStartup').checked = !!state.isStartup;
+  if (state.startupItems) startupItems = state.startupItems;
+  if (state.extraConsumptions) extraConsumptions = state.extraConsumptions;
+  if (state.boilerSource) boilerSource = state.boilerSource;
+  renderStartupItems();
+  renderAllExtraConsumptions();
+  calc();
+}
+
+function showStatus(msg){
+  const el = document.getElementById('saveStatus');
+  el.textContent = msg;
+  setTimeout(()=>{ if (el.textContent === msg) el.textContent = ''; }, 4000);
+}
+
+document.getElementById('saveBtn').addEventListener('click', ()=>{
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(collectState()));
+    showStatus('✔ Dados salvos neste navegador em ' + new Date().toLocaleString('pt-BR'));
+  }catch(e){
+    showStatus('✖ Não foi possível salvar (armazenamento indisponível)');
+  }
+});
+
+document.getElementById('loadBtn').addEventListener('click', ()=>{
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw){ showStatus('Nenhum dado salvo encontrado neste navegador'); return; }
+    applyState(JSON.parse(raw));
+    showStatus('✔ Dados carregados');
+  }catch(e){
+    showStatus('✖ Erro ao carregar dados salvos');
+  }
+});
+
+// Carrega automaticamente ao abrir a página, se já houver algo salvo
+(function autoLoad(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw){
+      applyState(JSON.parse(raw));
+      showStatus('Dados salvos anteriormente foram carregados automaticamente');
+    }
+  }catch(e){}
+})();
+
+// ---------------- Cenários nomeados ----------------
+
+function loadScenariosMap(){
+  try{
+    return JSON.parse(localStorage.getItem(SCENARIOS_KEY)) || {};
+  }catch(e){
+    return {};
+  }
+}
+
+function saveScenariosMap(map){
+  try{
+    localStorage.setItem(SCENARIOS_KEY, JSON.stringify(map));
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+function refreshScenarioSelect(){
+  const map = loadScenariosMap();
+  const select = document.getElementById('scenarioSelect');
+  const names = Object.keys(map).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const current = select.value;
+  select.innerHTML = '<option value="">— selecionar —</option>' +
+    names.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  if (names.includes(current)) select.value = current;
+}
+
+document.getElementById('saveScenarioBtn').addEventListener('click', ()=>{
+  const nameInput = document.getElementById('scenarioName');
+  const name = nameInput.value.trim();
+  if (!name){ showStatus('Digite um nome para o cenário'); return; }
+  const map = loadScenariosMap();
+  if (map[name] && !confirm('Já existe um cenário chamado "' + name + '". Deseja sobrescrever?')) return;
+  map[name] = collectState();
+  if (!saveScenariosMap(map)){ showStatus('✖ Não foi possível salvar o cenário (armazenamento indisponível)'); return; }
+  refreshScenarioSelect();
+  document.getElementById('scenarioSelect').value = name;
+  showStatus('✔ Cenário "' + name + '" salvo');
+});
+
+document.getElementById('loadScenarioBtn').addEventListener('click', ()=>{
+  const name = document.getElementById('scenarioSelect').value;
+  if (!name){ showStatus('Selecione um cenário para carregar'); return; }
+  const map = loadScenariosMap();
+  if (!map[name]){ showStatus('Cenário não encontrado'); return; }
+  applyState(map[name]);
+  document.getElementById('scenarioName').value = name;
+  showStatus('✔ Cenário "' + name + '" carregado');
+});
+
+document.getElementById('deleteScenarioBtn').addEventListener('click', ()=>{
+  const name = document.getElementById('scenarioSelect').value;
+  if (!name){ showStatus('Selecione um cenário para excluir'); return; }
+  if (!confirm('Excluir o cenário "' + name + '"?')) return;
+  const map = loadScenariosMap();
+  delete map[name];
+  if (!saveScenariosMap(map)){ showStatus('✖ Não foi possível excluir (armazenamento indisponível)'); return; }
+  refreshScenarioSelect();
+  showStatus('🗑️ Cenário "' + name + '" excluído');
+});
+
+document.getElementById('exportScenarioBtn').addEventListener('click', ()=>{
+  const name = document.getElementById('scenarioSelect').value;
+  const map = loadScenariosMap();
+  let payload;
+  if (name && map[name]){
+    payload = { type:'cenario-unico', nome:name, dados: map[name] };
+  } else {
+    payload = { type:'todos-cenarios', dados: map };
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (name ? 'cenario_' + name.replace(/\s+/g,'_') : 'cenarios_balanco_vapor') + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showStatus('✔ Arquivo exportado');
+});
+
+document.getElementById('importScenarioBtn').addEventListener('click', ()=>{
+  document.getElementById('importScenarioFile').click();
+});
+
+document.getElementById('importScenarioFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt)=>{
+    try{
+      const payload = JSON.parse(evt.target.result);
+      const map = loadScenariosMap();
+      if (payload.type === 'cenario-unico' && payload.nome && payload.dados){
+        map[payload.nome] = payload.dados;
+      } else if (payload.type === 'todos-cenarios' && payload.dados){
+        Object.assign(map, payload.dados);
+      } else if (payload.inputs){
+        // arquivo contém um único estado sem wrapper — usa o nome do arquivo
+        const nome = file.name.replace(/\.json$/i,'');
+        map[nome] = payload;
+      } else {
+        throw new Error('formato inválido');
+      }
+      if (!saveScenariosMap(map)){ showStatus('✖ Não foi possível importar (armazenamento indisponível)'); e.target.value = ''; return; }
+      refreshScenarioSelect();
+      showStatus('✔ Cenário(s) importado(s)');
+    }catch(err){
+      showStatus('✖ Arquivo inválido');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+refreshScenarioSelect();
+
+function csvEscape(v){
+  const s = String(v);
+  return /[",;\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  calc(); // garante que os campos calculados estão atualizados
+  const rows = [];
+  rows.push(['Seção','Item','Valor','Unidade']);
+
+  rows.push(['Vapor Alta','Produção de Vapor de Alta', document.getElementById('caldeira').value, 't/h']);
+  rows.push(['Vapor Alta','Turndown atual', document.getElementById('turndownPct').value, '%']);
+  rows.push(['Vapor Alta','Consumo de Alta pelo TG1', document.getElementById('tg1In').value, 't/h']);
+  rows.push(['Vapor Alta','Rebaixamento Alta → Média', fmt(lastResults.letdownAM), 't/h']);
+  if (lastResults.deficitAlta > 0) rows.push(['Vapor Alta','Déficit de Alta', fmt(lastResults.deficitAlta), 't/h']);
+
+  rows.push(['Vapor Média','TG1 — saída Média', document.getElementById('tg1OutMedia').value, 't/h']);
+  rows.push(['Vapor Média','HEFA — Regime', document.getElementById('hefaRegimeMP').value, 't/h']);
+  rows.push(['Vapor Média','UGH — Regime', document.getElementById('ughRegimeMP').value, 't/h']);
+  rows.push(['Vapor Média','Rebaixamento Média → Baixa', fmt(lastResults.excessMB), 't/h']);
+  if (lastResults.deficitMedia > 0) rows.push(['Vapor Média','Déficit de Média', fmt(lastResults.deficitMedia), 't/h']);
+
+  rows.push(['Vapor Baixa','PTU', document.getElementById('ptuBaixa').value, 't/h']);
+  rows.push(['Vapor Baixa','Desaerador', document.getElementById('desaerador').value, 't/h']);
+  rows.push(['Vapor Baixa','HEFA — Regime', document.getElementById('hefaRegimeLP').value, 't/h']);
+  rows.push(['Vapor Baixa','BioFCC', document.getElementById('biofccLP').value, 't/h']);
+  rows.push(['Vapor Baixa','Aquecimento Tanques OSBL (total)', document.getElementById('osblTotal').textContent, 't/h']);
+  rows.push(['Vapor Baixa','Saldo final de Vapor Baixa', fmt(lastResults.saldoBaixa), 't/h']);
+  if (lastResults.deficitBaixa > 0) rows.push(['Vapor Baixa','Déficit de Baixa', fmt(lastResults.deficitBaixa), 't/h']);
+
+  rows.push(['Condensador','Vapor pro condensador', fmt(lastResults.condFlow), 't/h']);
+  rows.push(['Condensador','Duty', document.getElementById('condDutyMcal').textContent, 'Mcal/h']);
+  rows.push(['Condensador','Água de resfriamento estimada', document.getElementById('condCW').textContent, 't/h']);
+
+  const csvContent = rows.map(r => r.map(csvEscape).join(';')).join('\n');
+  const blob = new Blob(['﻿' + csvContent], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'balanco_vapor_resultados_' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showStatus('✔ CSV exportado');
+});
+</script>
+
+<div style="text-align:center; color:var(--muted); font-size:11px; margin-top:24px; padding-bottom:10px; letter-spacing:.08em;">
+  by ALR
+</div>
+
+</body>
+</html>
