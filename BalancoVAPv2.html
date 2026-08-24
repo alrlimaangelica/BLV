@@ -573,10 +573,16 @@
 function num(id){ const el = document.getElementById(id); return parseFloat(el.value) || 0; }
 function set(id, val){ document.getElementById(id).textContent = val; }
 function fmt(v){ return (Math.round(v*1000)/1000).toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:3}); }
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, ch => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[ch]));
+}
 
 const startupCheckbox = document.getElementById('isStartup');
 let boilerSource = 'turndown';
 let autosaveTimer = null;
+let lastResults = {};
 
 let startupItems = [
   {name:'UGH — Partida', pressure:'alta', flow:0},
@@ -602,7 +608,7 @@ function renderExtraConsumptions(level){
 
   list.innerHTML = extraConsumptions[level].map((item,index)=>`
     <div class="extra-consumption-item" data-index="${index}">
-      <input type="text" class="extra-name" value="${item.name}">
+      <input type="text" class="extra-name" value="${escapeHtml(item.name)}">
       <input type="number" class="extra-flow" value="${item.flow}" min="0" step="0.1">
       <span class="extra-unit">t/h</span>
       <button class="extra-delete" title="Excluir consumo">×</button>
@@ -644,7 +650,7 @@ function renderStartupItems(){
   const list = document.getElementById('startupList');
   list.innerHTML = startupItems.map((item,index)=>`
     <div class="startup-item" data-index="${index}">
-      <input type="text" class="startup-name" value="${item.name}">
+      <input type="text" class="startup-name" value="${escapeHtml(item.name)}">
       <select class="startup-pressure">
         <option value="alta" ${item.pressure==='alta'?'selected':''}>Alta</option>
         <option value="media" ${item.pressure==='media'?'selected':''}>Média</option>
@@ -913,7 +919,7 @@ function calc(){
   function renderTable(elId, rows, total){
     const el = document.getElementById(elId);
     el.innerHTML =
-      rows.map(r=>`<tr><td>${r[0]}</td><td>${fmt(r[1])} t/h</td></tr>`).join('') +
+      rows.map(r=>`<tr><td>${escapeHtml(r[0])}</td><td>${fmt(r[1])} t/h</td></tr>`).join('') +
       `<tr><td>Total</td><td>${fmt(total)} t/h</td></tr>`;
   }
 
@@ -930,6 +936,14 @@ function calc(){
   set('totDiff', (diff >= 0 ? '+' : '') + fmt(diff) + ' t/h');
   document.getElementById('cardFecha').className =
     'card' + (Math.abs(diff) > 0.05 ? ' hot' : ' cool');
+
+  // Guarda os valores numéricos calculados (sem texto de status) para uso na exportação CSV
+  lastResults = {
+    producaoAlta, deficitAlta, letdownAM,
+    deficitMedia, excessMB,
+    saldoBaixa, deficitBaixa, condFlow,
+    dutyMcal, cwFlow
+  };
 
   scheduleAutosave();
 }
@@ -1098,8 +1112,9 @@ function loadScenariosMap(){
 function saveScenariosMap(map){
   try{
     localStorage.setItem(SCENARIOS_KEY, JSON.stringify(map));
+    return true;
   }catch(e){
-    showStatus('✖ Não foi possível salvar o cenário (armazenamento indisponível)');
+    return false;
   }
 }
 
@@ -1109,7 +1124,7 @@ function refreshScenarioSelect(){
   const names = Object.keys(map).sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const current = select.value;
   select.innerHTML = '<option value="">— selecionar —</option>' +
-    names.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">${n}</option>`).join('');
+    names.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
   if (names.includes(current)) select.value = current;
 }
 
@@ -1120,7 +1135,7 @@ document.getElementById('saveScenarioBtn').addEventListener('click', ()=>{
   const map = loadScenariosMap();
   if (map[name] && !confirm('Já existe um cenário chamado "' + name + '". Deseja sobrescrever?')) return;
   map[name] = collectState();
-  saveScenariosMap(map);
+  if (!saveScenariosMap(map)){ showStatus('✖ Não foi possível salvar o cenário (armazenamento indisponível)'); return; }
   refreshScenarioSelect();
   document.getElementById('scenarioSelect').value = name;
   showStatus('✔ Cenário "' + name + '" salvo');
@@ -1142,7 +1157,7 @@ document.getElementById('deleteScenarioBtn').addEventListener('click', ()=>{
   if (!confirm('Excluir o cenário "' + name + '"?')) return;
   const map = loadScenariosMap();
   delete map[name];
-  saveScenariosMap(map);
+  if (!saveScenariosMap(map)){ showStatus('✖ Não foi possível excluir (armazenamento indisponível)'); return; }
   refreshScenarioSelect();
   showStatus('🗑️ Cenário "' + name + '" excluído');
 });
@@ -1191,7 +1206,7 @@ document.getElementById('importScenarioFile').addEventListener('change', (e)=>{
       } else {
         throw new Error('formato inválido');
       }
-      saveScenariosMap(map);
+      if (!saveScenariosMap(map)){ showStatus('✖ Não foi possível importar (armazenamento indisponível)'); e.target.value = ''; return; }
       refreshScenarioSelect();
       showStatus('✔ Cenário(s) importado(s)');
     }catch(err){
@@ -1217,21 +1232,24 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   rows.push(['Vapor Alta','Produção de Vapor de Alta', document.getElementById('caldeira').value, 't/h']);
   rows.push(['Vapor Alta','Turndown atual', document.getElementById('turndownPct').value, '%']);
   rows.push(['Vapor Alta','Consumo de Alta pelo TG1', document.getElementById('tg1In').value, 't/h']);
-  rows.push(['Vapor Alta','Rebaixamento Alta → Média', document.getElementById('vAltaSaldo').textContent, 't/h']);
+  rows.push(['Vapor Alta','Rebaixamento Alta → Média', fmt(lastResults.letdownAM), 't/h']);
+  if (lastResults.deficitAlta > 0) rows.push(['Vapor Alta','Déficit de Alta', fmt(lastResults.deficitAlta), 't/h']);
 
   rows.push(['Vapor Média','TG1 — saída Média', document.getElementById('tg1OutMedia').value, 't/h']);
   rows.push(['Vapor Média','HEFA — Regime', document.getElementById('hefaRegimeMP').value, 't/h']);
   rows.push(['Vapor Média','UGH — Regime', document.getElementById('ughRegimeMP').value, 't/h']);
-  rows.push(['Vapor Média','Rebaixamento/Déficit Média', document.getElementById('vMediaSaldo').textContent, 't/h']);
+  rows.push(['Vapor Média','Rebaixamento Média → Baixa', fmt(lastResults.excessMB), 't/h']);
+  if (lastResults.deficitMedia > 0) rows.push(['Vapor Média','Déficit de Média', fmt(lastResults.deficitMedia), 't/h']);
 
   rows.push(['Vapor Baixa','PTU', document.getElementById('ptuBaixa').value, 't/h']);
   rows.push(['Vapor Baixa','Desaerador', document.getElementById('desaerador').value, 't/h']);
   rows.push(['Vapor Baixa','HEFA — Regime', document.getElementById('hefaRegimeLP').value, 't/h']);
   rows.push(['Vapor Baixa','BioFCC', document.getElementById('biofccLP').value, 't/h']);
   rows.push(['Vapor Baixa','Aquecimento Tanques OSBL (total)', document.getElementById('osblTotal').textContent, 't/h']);
-  rows.push(['Vapor Baixa','Saldo final de Vapor Baixa', document.getElementById('vBaixaSaldo').textContent, 't/h']);
+  rows.push(['Vapor Baixa','Saldo final de Vapor Baixa', fmt(lastResults.saldoBaixa), 't/h']);
+  if (lastResults.deficitBaixa > 0) rows.push(['Vapor Baixa','Déficit de Baixa', fmt(lastResults.deficitBaixa), 't/h']);
 
-  rows.push(['Condensador','Vapor pro condensador', document.getElementById('vCond').textContent, 't/h']);
+  rows.push(['Condensador','Vapor pro condensador', fmt(lastResults.condFlow), 't/h']);
   rows.push(['Condensador','Duty', document.getElementById('condDutyMcal').textContent, 'Mcal/h']);
   rows.push(['Condensador','Água de resfriamento estimada', document.getElementById('condCW').textContent, 't/h']);
 
